@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+[[Notebook]](https://colab.research.google.com/drive/1Ss4u542XUhT8eZ3GmyecGPjyi1pRzHHb?usp=sharing)
 
-## Getting Started
+### Aim:
 
-First, run the development server:
+This project aims to create a code generator that utilizes LLMs code generation capabilities and takes data references from GitHub. 
+[Extended features]
+Code implementation agent, error logging and error solving from StackOverflow api.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Tech stack:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Development framework: **Next.js**
+2. Knowledge Graph and Vector Database: **Neo4j**
+3. LLM orchestration framework: **Langchain**
+4. LLM: **DeepSeek**, **CodeLlama**, **Llama 3.1/2/3**, Gpt-4o  
+5. Embeddings Model: 
+Free: **Snowflake Arctic-Embed 2.0** *(best)***, CodeBERT** *(best-coder)* 
+Paid: **OpenAI text-embedding-3-large, OpenAI's code-search-babbage-{code, text}-001
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Methodology:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Prompt Input
+2. Keyword extraction from prompts
+3. Top-k repositories are extracted based on the search results of keywords.
+4. Knowledge Graph schema is populated with the relevant data. *(refer structure below)*
+5. Each code file has a summary. Only those nodes are retrieved whose summaries are semantically similar to the user prompt. Additionally the nodes dependent on other nodes are also augmented for context. (this means we’ll need 2 KGs for repo structure and dependency structure.
+6. Retrieved data is with LLM for code generation.
+7. GitRAG Chatbot can used for code generation or QnA.
 
-## Learn More
+Additional:
 
-To learn more about Next.js, take a look at the following resources:
+1. Automatic Implementation of generated code.
+2. Discriminator to evaluate the code output 
+3. Errors can be queried to a StackOverflow-augmented chatbot.
+4. Code changes and iteration.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Knowledge Graph Structure:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Nodes: 
 
-## Deploy on Vercel
+1. Repo metadata (URL, Name, ID)
+2. Folder Name
+3. File Name
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Relationship:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Contains_Folder: Repo metadata → Folder Name
+2. Contains_Files: Folder Name → File Name
+
+### Literature Review:
+
+1. Github Searching Methods especially [search syntax](https://docs.github.com/en/search-github/github-code-search/understanding-github-code-search-syntax)
