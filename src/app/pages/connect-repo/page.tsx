@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function ConnectRepo() {
   const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [contents, setContents] = useState<any[]>([]);
+  const router = useRouter();
 
   const handleConnect = async () => {
     setLoading(true);
@@ -32,6 +34,18 @@ export default function ConnectRepo() {
         setError(data.message); // Handle messages like "empty repo"
       } else {
         setContents(data);
+        
+        // Send data and repoUrl to repo-structure
+        await fetch("/api/repo-structure", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ repoUrl, repoStructure: data }), // Sending both repoUrl and data
+        });
+
+        // Redirect to repo-structure page
+        router.push("/pages/repo-structure"); // Redirect to the repo-structure page
       }
 
       console.log("Repository Structure:", data);
@@ -73,16 +87,14 @@ export default function ConnectRepo() {
               <li key={index} className="mb-2">
                 <strong>{item.name}</strong> ({item.type}) - {item.path}
                 {item.download_url && (
-                  <>
-                    <a
-                      href={item.download_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-green-500 ml-2"
-                    >
-                      View File
-                    </a>
-                  </>
+                  <a
+                    href={item.download_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-500 ml-2"
+                  >
+                    View File
+                  </a>
                 )}
               </li>
             ))}
