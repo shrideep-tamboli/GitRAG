@@ -147,18 +147,20 @@ export default function RepoStructure() {
         {error && <div className="p-4 bg-destructive/10 text-destructive rounded-md">{error}</div>}
 
         {!loading && !error && (
-          <div className="h-[800px] bg-card rounded-lg shadow-xl overflow-hidden">
+          <div className="h-[800px] bg-card rounded-lg shadow-xl overflow-hidden relative">
             <ForceGraph3D
               graphData={graphData}
               nodeLabel={(node: any) => node.label}
               nodeColor={(node: any) =>
                 selectedNode?.id === node.id
-                  ? "#facc15" // Highlight selected node in yellow
+                  ? "#ff0000" // Highlight selected node in red
                   : node.type === "Repo_Url"
-                  ? "#3b82f6"
+                  ? "#003366" // Dark Blue for Root Folder/Dir
                   : node.type === "Dir_Url"
-                  ? "#10b981"
-                  : "#f43f5e"
+                  ? "#4CAF50" // Medium Green for Folders
+                  : node.type === "File_Url"
+                  ? "#FF9800" // Orange for Files
+                  : "#003366" // Default color for other types
               }
               nodeRelSize={6}
               linkWidth={2}
@@ -169,6 +171,28 @@ export default function RepoStructure() {
               onNodeClick={(node: any) => handleNodeClick(node)}
               linkColor={() => "#94a3b8"}
             />
+            {/* Legend for node colors */}
+            <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
+              <h3 className="font-semibold">Node Color Legend</h3>
+              <div className="flex flex-col mt-2">
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+                  <span>Selected Node</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-blue-800 rounded-full mr-2"></div>
+                  <span>Root Folder</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
+                  <span>Folder</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
+                  <span>File</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
