@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import axios from "axios";
+import { useRouter } from "next/navigation";
 
 // Dynamically import the force-graph component
 const ForceGraph3D = dynamic(() => import("react-force-graph").then((mod) => mod.ForceGraph3D), {
@@ -32,6 +33,7 @@ interface GraphData {
 }
 
 export default function RepoStructure() {
+  const router = useRouter();
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -88,6 +90,15 @@ export default function RepoStructure() {
     }
   };
 
+  // Function to print details about the selected node
+  const printNodeDetails = (node: Node) => {
+    console.log(`Node Details:`);
+    console.log(`ID: ${node.id}`);
+    console.log(`Label: ${node.label}`);
+    console.log(`Type: ${node.type}`);
+    console.log(`URL: ${node.url}`);
+  };
+
   // Handle node click
   const handleNodeClick = useCallback(
     async (node: Node) => {
@@ -95,16 +106,31 @@ export default function RepoStructure() {
       setIsDialogOpen(true);
       setFileContent(""); // Reset content when opening dialog
 
-      if (node.type === "File_Url" && node.url) {
-        await fetchFileContent(node.url);
+      // Print details about the selected node
+      printNodeDetails(node);
+
+      if (node.type === "File_Url" && node.id) {
+        await fetchFileContent(node.id);
       }
     },
     [fetchFileContent]
   );
 
+  useEffect(() => {
+    if (fileContent) {
+      console.log("Displayed Content:");//, fileContent
+    }
+  }, [fileContent]);
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <div className="flex-1 container mx-auto p-8">
+        <button 
+          onClick={() => router.push("/pages/connect-repo")}
+          className="mb-4 p-2 bg-blue-500 text-white rounded"
+        >
+          Back to Connect Repo
+        </button>
         <Card className="p-6 mb-8">
           <h1 className="text-3xl font-bold mb-2">Repository Knowledge Graph</h1>
           <p className="text-muted-foreground">
@@ -175,12 +201,11 @@ export default function RepoStructure() {
                   </div>
                   <div>
                     <h3 className="font-semibold mb-1">Path</h3>
-                    <p className="text-muted-foreground break-all">{selectedNode?.url}</p>
                   </div>
                   {selectedNode?.type === "File_Url" && (
                     <div>
                       <a
-                        href={selectedNode.url}
+                        href={selectedNode.id}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline"

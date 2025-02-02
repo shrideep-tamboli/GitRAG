@@ -145,7 +145,11 @@ export async function GET() {
       });
     });
 
-    return NextResponse.json({ nodes, links }, { status: 200 });
+    // Assuming the repoUrl is stored in the nodes with type "Repo"
+    const repoNode = nodes.find(node => node.type === "Repo");
+    const repoUrl = repoNode ? repoNode.id : null; // Get the repoUrl from the Repo node
+
+    return NextResponse.json({ nodes, links, repoUrl }, { status: 200 });
   } catch (error: any) {
     console.error("Error fetching graph data:", error.message);
     return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
