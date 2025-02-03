@@ -19,9 +19,7 @@ export async function POST(req: Request) {
     const firstUrl = repoUrl;
 
     // Empty the graph before adding new data
-    await session.run(
-        `MATCH (n) DETACH DELETE n`
-      );
+    await session.run(`MATCH (n) DETACH DELETE n`);
 
     // Create the main repository node
     await session.run(
@@ -35,6 +33,7 @@ export async function POST(req: Request) {
     const addToGraph = async (item: any) => {
       const pathParts = item.path.split("/");
       const itemName = pathParts[pathParts.length - 1];
+      const codeSummary = item.codeSummary || "No summary available"; // Default if missing
 
       if (pathParts.length === 1) {
         // Root-level items
@@ -43,18 +42,20 @@ export async function POST(req: Request) {
           await session.run(
             `
               MERGE (dir:Dir {url: $dirUrl, type: "Dir_Url", label: $itemName})
+              ON CREATE SET dir.codeSummary = $codeSummary
               MERGE (repo)-[:CONTAINS_DIR]->(dir)
             `,
-            { dirUrl, itemName }
+            { dirUrl, itemName, codeSummary }
           );
         } else if (item.type === "file") {
           const fileUrl = item.download_url;
           await session.run(
             `
               MERGE (file:File {url: $fileUrl, type: "File_Url", label: $itemName})
+              ON CREATE SET file.codeSummary = $codeSummary
               MERGE (repo)-[:CONTAINS_FILE]->(file)
             `,
-            { fileUrl, itemName }
+            { fileUrl, itemName, codeSummary }
           );
         }
       } else {
@@ -67,20 +68,22 @@ export async function POST(req: Request) {
           await session.run(
             `
               MERGE (dir:Dir {url: $dirUrl, type: "Dir_Url", label: $itemName})
+              ON CREATE SET dir.codeSummary = $codeSummary
               MERGE (parent:Dir {url: $parentUrl})
               MERGE (parent)-[:CONTAINS_DIR]->(dir)
             `,
-            { dirUrl, parentUrl, itemName }
+            { dirUrl, parentUrl, itemName, codeSummary }
           );
         } else if (item.type === "file") {
           const fileUrl = item.download_url;
           await session.run(
             `
               MERGE (file:File {url: $fileUrl, type: "File_Url", label: $itemName})
+              ON CREATE SET file.codeSummary = $codeSummary
               MERGE (parent:Dir {url: $parentUrl})
               MERGE (parent)-[:CONTAINS_FILE]->(file)
             `,
-            { fileUrl, parentUrl, itemName }
+            { fileUrl, parentUrl, itemName, codeSummary }
           );
         }
       }
@@ -129,12 +132,22 @@ export async function GET() {
       const relationship = record.get("r").type;
 
       if (!nodeSet.has(startNode.url)) {
-        nodes.push({ id: startNode.url, label: startNode.label, type: startNode.type });
+        nodes.push({
+          id: startNode.url,
+          label: startNode.label,
+          type: startNode.type,
+          codeSummary: startNode.codeSummary || "No summary available", // Include codeSummary
+        });
         nodeSet.add(startNode.url);
       }
 
       if (!nodeSet.has(endNode.url)) {
-        nodes.push({ id: endNode.url, label: endNode.label, type: endNode.type });
+        nodes.push({
+          id: endNode.url,
+          label: endNode.label,
+          type: endNode.type,
+          codeSummary: endNode.codeSummary || "No summary available",
+        });
         nodeSet.add(endNode.url);
       }
 
@@ -146,13 +159,16 @@ export async function GET() {
     });
 
     // Assuming the repoUrl is stored in the nodes with type "Repo"
-    const repoNode = nodes.find(node => node.type === "Repo");
+    const repoNode = nodes.find(node => node.type === "Repo_Url");
     const repoUrl = repoNode ? repoNode.id : null; // Get the repoUrl from the Repo node
 
     return NextResponse.json({ nodes, links, repoUrl }, { status: 200 });
   } catch (error: any) {
     console.error("Error fetching graph data:", error.message);
-    return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error", details: error.message },
+      { status: 500 }
+    );
   } finally {
     await session.close();
   }

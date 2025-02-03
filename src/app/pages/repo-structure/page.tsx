@@ -19,6 +19,7 @@ interface Node {
   label: string;
   type: string;
   url: string;
+  codeSummary?: string;
 }
 
 interface Link {
@@ -208,53 +209,63 @@ export default function RepoStructure() {
             </DialogHeader>
 
             <Tabs defaultValue="details" className="mt-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="details">Details</TabsTrigger>
-                {selectedNode?.type === "File_Url" && <TabsTrigger value="content">Content</TabsTrigger>}
-              </TabsList>
+  <TabsList className="grid w-full grid-cols-3"> {/* Change grid-cols-2 to grid-cols-3 */}
+    <TabsTrigger value="details">Details</TabsTrigger>
+    {selectedNode?.type === "File_Url" && <TabsTrigger value="content">Content</TabsTrigger>}
+    <TabsTrigger value="codeSummary">Code Summary</TabsTrigger> {/* New Tab */}
+  </TabsList>
 
-              <TabsContent value="details" className="mt-4">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold mb-1">Type</h3>
-                    <p className="text-muted-foreground">
-                      {selectedNode?.type === "File_Url" && "File"}
-                      {selectedNode?.type === "Dir_Url" && "Directory"}
-                      {selectedNode?.type === "Repo_Url" && "Repository"}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-1">Path</h3>
-                  </div>
-                  {selectedNode?.type === "File_Url" && (
-                    <div>
-                      <a
-                        href={selectedNode.id}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        Open in GitHub ↗
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
+  <TabsContent value="details" className="mt-4">
+    <div className="space-y-4">
+      <div>
+        <h3 className="font-semibold mb-1">Type</h3>
+        <p className="text-muted-foreground">
+          {selectedNode?.type === "File_Url" && "File"}
+          {selectedNode?.type === "Dir_Url" && "Directory"}
+          {selectedNode?.type === "Repo_Url" && "Repository"}
+        </p>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-1">Path</h3>
+      </div>
+      {selectedNode?.type === "File_Url" && (
+        <div>
+          <a
+            href={selectedNode.id}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Open in GitHub ↗
+          </a>
+        </div>
+      )}
+    </div>
+  </TabsContent>
 
-              {selectedNode?.type === "File_Url" && (
-                <TabsContent value="content" className="mt-4">
-                  {isLoadingContent ? (
-                    <div className="flex items-center justify-center p-4">
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                    </div>
-                  ) : (
-                    <pre className="bg-muted p-4 rounded-md overflow-x-auto max-h-[500px] overflow-y-auto">
-                      <code>{fileContent}</code>
-                    </pre>
-                  )}
-                </TabsContent>
-              )}
-            </Tabs>
+  {selectedNode?.type === "File_Url" && (
+    <TabsContent value="content" className="mt-4">
+      {isLoadingContent ? (
+        <div className="flex items-center justify-center p-4">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : (
+        <pre className="bg-muted p-4 rounded-md overflow-x-auto max-h-[500px] overflow-y-auto">
+          <code>{fileContent}</code>
+        </pre>
+      )}
+    </TabsContent>
+  )}
+
+  <TabsContent value="codeSummary" className="mt-4"> {/* New Code Summary Tab */}
+    <div className="p-4 bg-muted rounded-md">
+      <p className="text-muted-foreground">
+        {selectedNode?.codeSummary || "No summary available"}
+      </p>
+    </div>
+  </TabsContent>
+</Tabs>
+
           </DialogContent>
         </Dialog>
       </div>
