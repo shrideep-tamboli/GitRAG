@@ -46,7 +46,8 @@ async function getCodeSummary(code: string): Promise<string> {
       messages: [
         {
           role: "user",
-          content: `Provide a brief, concise summary (max 100 words) of this code's main functionality:\n\n${truncatedCode}`,
+          content: `Provide a detaild summary for the given code:
+          \n\n${truncatedCode}`,
         },
       ],
       model: "llama-3.3-70b-versatile",

@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 // Dynamically import the force-graph component
 const ForceGraph3D = dynamic(() => import("react-force-graph").then((mod) => mod.ForceGraph3D), {
@@ -257,10 +259,12 @@ export default function RepoStructure() {
     </TabsContent>
   )}
 
-  <TabsContent value="codeSummary" className="mt-4"> {/* New Code Summary Tab */}
+  <TabsContent value="codeSummary" className="mt-4 overflow-y-auto max-h-[400px]"> {/* New Code Summary Tab */}
     <div className="p-4 bg-muted rounded-md">
       <p className="text-muted-foreground">
+      <ReactMarkdown className="prose max-w-none" remarkPlugins={[remarkGfm]}>
         {selectedNode?.codeSummary || "No summary available"}
+      </ReactMarkdown>
       </p>
     </div>
   </TabsContent>
