@@ -46,14 +46,30 @@ async function getCodeSummary(code: string): Promise<string> {
       messages: [
         {
           role: "user",
-          content: `Provide a detaild summary for the given code:
-          \n\n${truncatedCode}`,
+          content: `Analyze the provided code and return a detailed summary in a valid JSON format. Your response should include (but is not limited to) the following keys:
+      
+      {
+        "overall_summary": "A comprehensive explanation of what the code does, its purpose, and high-level functionality.",
+        "functions": "A list of all the functions defined in the code along with a brief description of each function’s purpose, parameters, and return values (if identifiable).",
+        "classes": "If applicable, a list of classes defined in the code, along with their key methods and attributes.",
+        "variables": "Important global or significant variables used in the code, including constants.",
+        "dependencies": {
+          "external_libraries": "Any external libraries, frameworks, or modules imported and used in the code.",
+          "file_dependencies": "Any other files or modules (both frontend and backend) that the code depends on for data (e.g., files from which data is sent or received, API endpoints, etc.)."
+        },
+        "requests": "Identify and list all HTTP requests (GET, POST, PUT, DELETE, etc.) made in the code along with their endpoints and a brief description of their purpose.",
+        "file_system_operations": "Any file system operations performed (reading/writing files, accessing directories, etc.).",
+        "additional_notes": "Any other relevant details or observations that may help in understanding the code (such as design patterns, error handling, comments, etc.)."
+      }
+      
+      Please ensure that the output is valid JSON and use the keys above as a guideline. Do not include any extra keys or text outside the JSON structure.
+      
+      \n\nHere is the code to analyze:\n\n${truncatedCode}`
         },
       ],
       model: "llama-3.3-70b-versatile",
       // Add temperature and max tokens to control response size
       temperature: 0.5,
-      max_tokens: 150,
     })
 
     return completion.choices[0]?.message?.content || "No summary available"

@@ -259,15 +259,14 @@ export default function RepoStructure() {
     </TabsContent>
   )}
 
-  <TabsContent value="codeSummary" className="mt-4 overflow-y-auto max-h-[400px]"> {/* New Code Summary Tab */}
-    <div className="p-4 bg-muted rounded-md">
-      <p className="text-muted-foreground">
+  <TabsContent value="codeSummary" className="mt-4">
+    <div className="p-4 bg-muted rounded-md overflow-y-auto max-h-[500px]">
       <ReactMarkdown className="prose max-w-none" remarkPlugins={[remarkGfm]}>
         {selectedNode?.codeSummary || "No summary available"}
       </ReactMarkdown>
-      </p>
     </div>
   </TabsContent>
+
 </Tabs>
 
           </DialogContent>
