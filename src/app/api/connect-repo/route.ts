@@ -73,15 +73,25 @@ async function getCodeSummary(code: string): Promise<string> {
     })
 
     return completion.choices[0]?.message?.content || "No summary available"
-  } catch (error: any) {
-    // Improved error handling
-    if (error?.response?.status === 413 || error?.message?.includes("rate_limit_exceeded")) {
-      console.warn("Rate limit hit, returning simplified summary")
-      return "File content too large to summarize"
+  } catch (error) {
+    if (error instanceof Error) {
+      if (
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response !== null &&
+        "status" in error.response &&
+        error.response.status === 413
+      ) {
+        console.warn("Rate limit hit, returning simplified summary");
+        return "File content too large to summarize";
+      }
+      console.error("Error getting code summary:", error.message);
+      return "Failed to generate summary";
+    } else {
+      console.error("Unexpected error getting code summary:", error);
+      return "Failed to generate summary";
     }
-    console.error("Error getting code summary:", error)
-    return "Failed to generate summary"
-  }
+  }  
 }
 
 // Function to fetch code content from URL with size limit
@@ -92,72 +102,109 @@ async function fetchCodeContent(url: string, maxSize = 100000): Promise<string> 
       timeout: 5000, // 5 second timeout
     })
     return response.data
-  } catch (error: any) {
-    if (error.code === "ECONNABORTED") {
-      console.warn("Request timeout or content too large:", url)
-      return ""
+  } catch (error) {
+    if (error instanceof Error) {
+      if ("code" in error && error.code === "ECONNABORTED") {
+        console.warn("Request timeout or content too large:", url);
+        return "";
+      }      
+      console.error("Error fetching code content:", error.message);
+      return "";
+    } else {
+      console.error("Unexpected error fetching code content:", error);
+      return "";
     }
-    console.error("Error fetching code content:", error)
-    return ""
-  }
+  }  
+}
+
+interface RepositoryItem {
+  name: string;
+  path: string;
+  type: 'file' | 'dir';  // GitHub API returns these types
+  download_url: string | null;
+  codeSummary: string | null;
 }
 
 // Recursive function to fetch repository contents
-const fetchRepositoryContents = async (repoUrl: string, token: string, path = ""): Promise<any[]> => {
-  const repoItems: any[] = []
+const fetchRepositoryContents = async (repoUrl: string, token: string, path = ""): Promise<RepositoryItem[]> => {
+  const repoItems: RepositoryItem[] = [];
 
   try {
-    const parts = repoUrl.replace(/\/$/, "").split("/")
-    const owner = parts[parts.length - 2]
-    const repoName = parts[parts.length - 1]
-    const apiUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}`
+    const parts = repoUrl.replace(/\/$/, "").split("/");
+    const owner = parts[parts.length - 2];
+    const repoName = parts[parts.length - 1];
+    const apiUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}`;
 
     const response = await axios.get(apiUrl, {
       headers: {
         Authorization: `token ${token}`,
         Accept: "application/vnd.github.v3+json",
       },
-    })
+    });
 
     if (response.status === 200) {
-      const contents = response.data
+      const contents: Array<{
+        name: string;
+        path: string;
+        type: string;
+        download_url?: string | null;
+      }> = response.data;
 
       for (const item of contents) {
         if (isBlacklisted(item.name, item.path)) {
-          continue
+          continue;
         }
 
-        const repoItem = {
+        const repoItem: RepositoryItem = {
           name: item.name,
           path: item.path,
-          type: item.type,
+          type: item.type as 'file' | 'dir',
           download_url: item.download_url || null,
-          codeSummary: null as string | null,
-        }
+          codeSummary: null,
+        };
 
         // Only process files with specific extensions
         if (item.type === "file" && item.download_url && /\.(ts|tsx|js|jsx|py|java|cpp|c|go|rs|php)$/.test(item.name)) {
-          const codeContent = await fetchCodeContent(item.download_url)
+          const codeContent = await fetchCodeContent(item.download_url);
           if (codeContent) {
-            repoItem.codeSummary = await getCodeSummary(codeContent)
+            repoItem.codeSummary = await getCodeSummary(codeContent);
           }
         }
 
-        repoItems.push(repoItem)
+        repoItems.push(repoItem);
 
         if (item.type === "dir") {
-          const subdirContents = await fetchRepositoryContents(repoUrl, token, item.path)
-          repoItems.push(...subdirContents)
+          const subdirContents = await fetchRepositoryContents(repoUrl, token, item.path);
+          repoItems.push(...subdirContents);
         }
       }
     }
-  } catch (error: any) {
-    console.error(`Error fetching repository contents: ${error.message}`)
-    throw new Error(`Failed to fetch repository contents: ${error.response?.data?.message || error.message}`)
-  }
+  } catch (error) {
+    if (error instanceof Error) {
+      let errorMessage = error.message;
+      if (
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response !== null &&
+        "data" in error.response &&
+        typeof error.response.data === "object" &&
+        error.response.data !== null &&
+        "message" in error.response.data &&
+        typeof error.response.data.message === "string"
+      ) {
+        errorMessage = error.response.data.message;
+      }
 
-  return repoItems
-}
+      console.error(`Error fetching repository contents: ${errorMessage}`);
+      throw new Error(`Failed to fetch repository contents: ${errorMessage}`);
+    } else {
+      console.error("Unexpected error fetching repository contents:", error);
+      throw new Error("Failed to fetch repository contents");
+    }
+  }
+  return repoItems;
+};
+
 
 export async function POST(req: Request) {
   try {
@@ -177,9 +224,20 @@ export async function POST(req: Request) {
 
     console.log("Repo_Structure:", contents)
     return NextResponse.json(contents)
-  } catch (error: any) {
-    console.error("Error processing request:", error.message)
-    return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 })
-  }
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("Error processing request:", error.message);
+      return NextResponse.json(
+        { error: "Internal Server Error", details: error.message },
+        { status: 500 }
+      );
+    } else {
+      console.error("Unexpected error processing request:", error);
+      return NextResponse.json(
+        { error: "Internal Server Error", details: "An unexpected error occurred." },
+        { status: 500 }
+      );
+    }
+  }  
 }
 

@@ -29,8 +29,16 @@ export async function POST(req: Request) {
       { repoUrl: firstUrl }
     );
 
+    interface RepoStructureItem {
+      path: string;
+      type: string;
+      download_url?: string;
+      codeSummary?: string;
+      // add other fields if needed
+    }
+
     // Helper function to add nodes and relationships to the graph
-    const addToGraph = async (item: any) => {
+    const addToGraph = async (item: RepoStructureItem) => {
       const pathParts = item.path.split("/");
       const itemName = pathParts[pathParts.length - 1];
       const codeSummary = item.codeSummary || "No summary available"; // Default if missing
@@ -98,16 +106,38 @@ export async function POST(req: Request) {
       { message: "Repository structure successfully added to the knowledge graph" },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error("Error processing repository structure:", error.message);
-    return NextResponse.json(
-      { error: "Internal Server Error", details: error.message },
-      { status: 500 }
-    );
-  } finally {
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("Error processing repository structure:", error.message);
+      return NextResponse.json(
+        { error: "Internal Server Error", details: error.message },
+        { status: 500 }
+      );
+    } else {
+      console.error("Unexpected error processing repository structure:", error);
+      return NextResponse.json(
+        { error: "Internal Server Error", details: "An unexpected error occurred." },
+        { status: 500 }
+      );
+    }
+  }
+   finally {
     // Close the session
     await session.close();
   }
+}
+
+interface Node {
+  id: string;
+  label: string;
+  type: string;
+  codeSummary?: string;
+}
+
+interface Link {
+  source: string;
+  target: string;
+  relationship: string;
 }
 
 // GET request to fetch the knowledge graph data
@@ -122,9 +152,9 @@ export async function GET() {
     `);
 
     // Format data for the frontend graph library
-    const nodes: any[] = [];
-    const links: any[] = [];
-    const nodeSet = new Set();
+    const nodes: Node[] = [];
+    const links: Link[] = [];
+    const nodeSet = new Set<string>();
 
     result.records.forEach((record) => {
       const startNode = record.get("n").properties;
@@ -163,13 +193,22 @@ export async function GET() {
     const repoUrl = repoNode ? repoNode.id : null; // Get the repoUrl from the Repo node
 
     return NextResponse.json({ nodes, links, repoUrl }, { status: 200 });
-  } catch (error: any) {
-    console.error("Error fetching graph data:", error.message);
-    return NextResponse.json(
-      { error: "Internal Server Error", details: error.message },
-      { status: 500 }
-    );
-  } finally {
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("Error fetching graph data:", error.message);
+      return NextResponse.json(
+        { error: "Internal Server Error", details: error.message },
+        { status: 500 }
+      );
+    } else {
+      console.error("Unexpected error fetching graph data:", error);
+      return NextResponse.json(
+        { error: "Internal Server Error", details: "An unexpected error occurred." },
+        { status: 500 }
+      );
+    }
+  }
+   finally {
     await session.close();
   }
 }

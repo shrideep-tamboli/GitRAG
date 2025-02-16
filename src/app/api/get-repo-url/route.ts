@@ -20,10 +20,16 @@ export async function GET() {
     const repoUrl = result.records.length > 0 ? result.records[0].get("repoUrl") : null;
 
     return NextResponse.json({ repoUrl }, { status: 200 });
-  } catch (error: any) {
-    console.error("Error fetching repo URL:", error.message);
-    return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
-  } finally {
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("Error fetching repo URL:", error.message);
+      return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
+    } else {
+      console.error("Unexpected error fetching repo URL:", error);
+      return NextResponse.json({ error: "Internal Server Error", details: "An unexpected error occurred." }, { status: 500 });
+    }
+  }
+   finally {
     await session.close();
   }
 }

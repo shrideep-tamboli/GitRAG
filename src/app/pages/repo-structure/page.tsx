@@ -50,48 +50,31 @@ export default function RepoStructure() {
     const fetchGraphData = async () => {
       setLoading(true);
       setError("");
-
+  
       try {
         const response = await fetch("/api/repo-structure");
-
+  
         if (!response.ok) {
           throw new Error(`Failed to fetch graph data: ${response.statusText}`);
         }
-
+  
         const data = await response.json();
         setGraphData(data);
-      } catch (err: any) {
-        console.error("Error fetching graph data:", err.message);
-        setError(err.message);
+      } catch (err) {
+        if (err instanceof Error) {
+          console.error("Error fetching graph data:", err.message);
+          setError(err.message);
+        } else {
+          console.error("Unexpected error fetching graph data:", err);
+          setError("An unexpected error occurred.");
+        }
       } finally {
         setLoading(false);
       }
     };
-
+  
     fetchGraphData();
-  }, []);
-
-  // Fetch file content when a file node is selected
-  const fetchFileContent = async (url: string) => {
-    setIsLoadingContent(true);
-    try {
-      // For GitHub raw content URLs
-      if (url.includes("raw.githubusercontent.com")) {
-        const response = await axios.get(url);
-        setFileContent(response.data);
-      } else {
-        // For GitHub API URLs, convert to raw content URL
-        const rawUrl = url.replace("api.github.com/repos", "raw.githubusercontent.com").replace("/contents/", "/");
-        const response = await axios.get(rawUrl);
-        setFileContent(response.data);
-      }
-    } catch (err) {
-      console.error("Error fetching file content:", err);
-      setFileContent("Failed to load file content. This might be due to file size limitations or access restrictions.");
-    } finally {
-      setIsLoadingContent(false);
-    }
-  };
+  }, []);  
 
   // Function to print details about the selected node
   const printNodeDetails = (node: Node) => {
@@ -112,11 +95,33 @@ export default function RepoStructure() {
       // Print details about the selected node
       printNodeDetails(node);
 
+      // Move fetchFileContent inside useCallback
+      const fetchFileContent = async (url: string) => {
+        setIsLoadingContent(true);
+        try {
+          // For GitHub raw content URLs
+          if (url.includes("raw.githubusercontent.com")) {
+            const response = await axios.get(url);
+            setFileContent(response.data);
+          } else {
+            // For GitHub API URLs, convert to raw content URL
+            const rawUrl = url.replace("api.github.com/repos", "raw.githubusercontent.com").replace("/contents/", "/");
+            const response = await axios.get(rawUrl);
+            setFileContent(response.data);
+          }
+        } catch (err) {
+          console.error("Error fetching file content:", err);
+          setFileContent("Failed to load file content. This might be due to file size limitations or access restrictions.");
+        } finally {
+          setIsLoadingContent(false);
+        }
+      };
+
       if (node.type === "File_Url" && node.id) {
         await fetchFileContent(node.id);
       }
     },
-    [fetchFileContent]
+    [] // Update dependencies as needed
   );
 
   useEffect(() => {
@@ -153,25 +158,26 @@ export default function RepoStructure() {
           <div className="h-[800px] bg-card rounded-lg shadow-xl overflow-hidden relative">
             <ForceGraph3D
               graphData={graphData}
-              nodeLabel={(node: any) => node.label}
-              nodeColor={(node: any) =>
-                selectedNode?.id === node.id
+              nodeLabel={(node) => (node as Node).label}
+              nodeColor={(node) => {
+                const typedNode = node as Node;
+                return selectedNode?.id === typedNode.id
                   ? "#ff0000" // Highlight selected node in red
-                  : node.type === "Repo_Url"
+                  : typedNode.type === "Repo_Url"
                   ? "#003366" // Dark Blue for Root Folder/Dir
-                  : node.type === "Dir_Url"
+                  : typedNode.type === "Dir_Url"
                   ? "#4CAF50" // Medium Green for Folders
-                  : node.type === "File_Url"
+                  : typedNode.type === "File_Url"
                   ? "#FF9800" // Orange for Files
-                  : "#003366" // Default color for other types
-              }
+                  : "#003366"; // Default color for other types
+              }}
               nodeRelSize={6}
               linkWidth={2}
               linkDirectionalParticles={4}
               linkDirectionalParticleWidth={2}
               linkDirectionalParticleSpeed={0.005}
               backgroundColor="#f8f9fa"
-              onNodeClick={(node: any) => handleNodeClick(node)}
+              onNodeClick={(node) => handleNodeClick(node as Node)}
               linkColor={() => "#94a3b8"}
             />
             {/* Legend for node colors */}

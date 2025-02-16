@@ -8,37 +8,51 @@ export default function ConnectRepo() {
   const [inputRepoUrl, setInputRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [contents, setContents] = useState<any[]>([]);
+  interface RepoItem {
+    name: string;
+    path: string;
+    type: string;
+    download_url: string | null;
+    codeSummary?: string | null;
+  }
+  
+  const [contents, setContents] = useState<RepoItem[]>([]);
+  
   const router = useRouter();
 
   // Fetch the connected repository URL when the component mounts
   useEffect(() => {
     const fetchConnectedRepo = async () => {
       try {
-        const response = await fetch("/api/get-repo-url"); // Call the new endpoint
+        const response = await fetch("/api/get-repo-url");
         if (!response.ok) {
           throw new Error("Failed to fetch connected repository");
         }
         const data = await response.json();
-        console.log("Fetched data from get-repo-url:", data); // Debugging log
+        console.log("Fetched data from get-repo-url:", data);
         if (data.repoUrl) {
-          setRepoUrl(data.repoUrl); // Set the repoUrl from the fetched data
+          setRepoUrl(data.repoUrl);
         } else {
-          console.warn("No repoUrl found in the response."); // Debugging log
+          console.warn("No repoUrl found in the response.");
         }
-      } catch (err: any) {
-        console.error("Error fetching connected repository:", err.message);
+      } catch (err) {
+        if (err instanceof Error) {
+          console.error("Error fetching connected repository:", err.message);
+        } else {
+          console.error("Unexpected error fetching connected repository:", err);
+        }
       }
     };
-
+  
     fetchConnectedRepo();
   }, []);
+  
 
   const handleConnect = async () => {
     setLoading(true);
     setError("");
     setContents([]);
-
+  
     try {
       const response = await fetch("/api/connect-repo", {
         method: "POST",
@@ -47,50 +61,50 @@ export default function ConnectRepo() {
         },
         body: JSON.stringify({ url: inputRepoUrl }),
       });
-
+  
       const data = await response.json();
-
+  
       if (!response.ok) {
         throw new Error(data.error || "Failed to connect to the repository");
       }
-
+  
       if (data.message) {
-        setError(data.message); // Handle messages like "empty repo"
+        setError(data.message);
       } else {
         setContents(data);
-        
-        // Update the repoUrl state to the newly connected repository URL
-        setRepoUrl(inputRepoUrl); // Set the new repoUrl
-
-        // Clear the input field
-        setInputRepoUrl(""); // Clear the input field after successful connection
-
-        // Send data and repoUrl to repo-structure
+        setRepoUrl(inputRepoUrl);
+        setInputRepoUrl("");
+  
         await fetch("/api/repo-structure", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ 
-            repoUrl: inputRepoUrl, // Use the new repoUrl
+            repoUrl: inputRepoUrl,
             repoStructure: data
-          }), // Sending both repoUrl and data
+          }),
         });
-
-        // Redirect to repo-structure page
-        router.push("/pages/repo-structure"); // Redirect to the repo-structure page
+  
+        router.push("/pages/repo-structure");
       }
-
+  
       console.log("Repository Structure:", data);
       console.log('Received Repository Structure:', data);
       console.log('Received Repo URL:', repoUrl);
-    } catch (err: any) {
-      console.error("Error connecting to repository:", err.message);
-      setError(err.message);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error("Error connecting to repository:", err.message);
+        setError(err.message);
+      } else {
+        console.error("Unexpected error connecting to repository:", err);
+        setError("An unexpected error occurred.");
+      }
     } finally {
       setLoading(false);
     }
   };
+  
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen p-8">
