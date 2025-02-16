@@ -1,6 +1,6 @@
 "use client"
-import { Network, Database, GitBranch, Brain } from 'lucide-react';
-import Button from "@/components/ui/button";
+import { Network, Database, GitBranch, Brain, Linkedin, Github } from "lucide-react"
+import Button from "@/components/ui/button"
 
 export default function Home() {
   return (
@@ -12,8 +12,8 @@ export default function Home() {
         </div>
 
         <p className="text-center text-lg mb-6 text-muted-foreground">
-          Enhancing AI coding assistants by building a knowledge graph from GitHub repositories 
-          that contain solutions to similar problems.
+          Enhancing AI coding assistants by building a knowledge graph from GitHub repositories that contain solutions
+          to similar problems.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl mb-8">
@@ -35,14 +35,14 @@ export default function Home() {
         </div>
 
         <div className="flex gap-4 items-center flex-col sm:flex-row">
-        <Button
-          className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] bg-black transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-          onClick={() => window.location.href = '/pages/connect-repo'}
-        >
-          <GitBranch className="w-5 h-5" />
-          Connect Git Repository
-        </Button>
-          
+          <Button
+            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] bg-black transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
+            onClick={() => (window.location.href = "/pages/connect-repo")}
+          >
+            <GitBranch className="w-5 h-5" />
+            Connect Git Repository
+          </Button>
+
           <a
             className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
             href="https://github.com/shrideep-tamboli/GitRAG"
@@ -67,29 +67,26 @@ export default function Home() {
       <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center text-sm text-muted-foreground">
         <a
           className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://github.com/yourusername/knowledge-graph-assistant/docs"
+          href="https://www.linkedin.com/in/shrideep-tamboli/"
           target="_blank"
           rel="noopener noreferrer"
+          aria-label="LinkedIn Profile"
         >
-          Documentation
+          <Linkedin className="w-4 h-4" />
+          LinkedIn
         </a>
         <a
           className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://github.com/yourusername/knowledge-graph-assistant/examples"
+          href="https://github.com/shrideep-tamboli"
           target="_blank"
           rel="noopener noreferrer"
+          aria-label="GitHub Repository"
         >
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://github.com/yourusername/knowledge-graph-assistant"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          GitHub →
+          <Github className="w-4 h-4" />
+          GitHub
         </a>
       </footer>
     </div>
-  );
+  )
 }
+
