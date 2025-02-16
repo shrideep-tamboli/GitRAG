@@ -8,8 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // Dynamically import the force-graph component
 const ForceGraph3D = dynamic(() => import("react-force-graph").then((mod) => mod.ForceGraph3D), {
@@ -22,6 +22,8 @@ interface Node {
   type: string;
   url: string;
   codeSummary?: string;
+  contentEmbedding?: number[] | null;
+  summaryEmbedding?: number[] | null;
 }
 
 interface Link {
@@ -44,41 +46,42 @@ export default function RepoStructure() {
   const [fileContent, setFileContent] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [vectorizing, setVectorizing] = useState(false);
+  const [vectorizeMessage, setVectorizeMessage] = useState("");
 
   // Fetch the knowledge graph data from the backend
-  useEffect(() => {
-    const fetchGraphData = async () => {
-      setLoading(true);
-      setError("");
-  
-      try {
-        const response = await fetch("/api/repo-structure");
-  
-        if (!response.ok) {
-          throw new Error(`Failed to fetch graph data: ${response.statusText}`);
-        }
-  
-        const data = await response.json();
-        setGraphData(data);
-      } catch (err) {
-        if (err instanceof Error) {
-          console.error("Error fetching graph data:", err.message);
-          setError(err.message);
-        } else {
-          console.error("Unexpected error fetching graph data:", err);
-          setError("An unexpected error occurred.");
-        }
-      } finally {
-        setLoading(false);
+  const fetchGraphData = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/repo-structure");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch graph data: ${response.statusText}`);
       }
-    };
-  
+      const data = await response.json();
+      setGraphData(data);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("Error fetching graph data:", err.message);
+        setError(err.message);
+      } else {
+        console.error("An unknown error occurred:", err);
+        setError("An unknown error occurred");
+      }
+    }
+    finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchGraphData();
-  }, []);  
+  }, []);
 
   // Function to print details about the selected node
   const printNodeDetails = (node: Node) => {
-    console.log(`Node Details:`);
+    console.log("Node Details:");
     console.log(`ID: ${node.id}`);
     console.log(`Label: ${node.label}`);
     console.log(`Type: ${node.type}`);
@@ -92,26 +95,27 @@ export default function RepoStructure() {
       setIsDialogOpen(true);
       setFileContent(""); // Reset content when opening dialog
 
-      // Print details about the selected node
       printNodeDetails(node);
 
-      // Move fetchFileContent inside useCallback
+      // If the node is a file, optionally fetch file content
       const fetchFileContent = async (url: string) => {
         setIsLoadingContent(true);
         try {
-          // For GitHub raw content URLs
           if (url.includes("raw.githubusercontent.com")) {
             const response = await axios.get(url);
             setFileContent(response.data);
           } else {
-            // For GitHub API URLs, convert to raw content URL
-            const rawUrl = url.replace("api.github.com/repos", "raw.githubusercontent.com").replace("/contents/", "/");
+            const rawUrl = url
+              .replace("api.github.com/repos", "raw.githubusercontent.com")
+              .replace("/contents/", "/");
             const response = await axios.get(rawUrl);
             setFileContent(response.data);
           }
         } catch (err) {
           console.error("Error fetching file content:", err);
-          setFileContent("Failed to load file content. This might be due to file size limitations or access restrictions.");
+          setFileContent(
+            "Failed to load file content. This might be due to file size limitations or access restrictions."
+          );
         } finally {
           setIsLoadingContent(false);
         }
@@ -121,24 +125,54 @@ export default function RepoStructure() {
         await fetchFileContent(node.id);
       }
     },
-    [] // Update dependencies as needed
+    []
   );
 
-  useEffect(() => {
-    if (fileContent) {
-      console.log("Displayed Content:");//, fileContent
+  // Handle the "Vectorize" button click
+  const handleVectorize = async () => {
+    setVectorizing(true);
+    setVectorizeMessage("");
+    try {
+      const response = await axios.post("/api/vectorize");
+      setVectorizeMessage(response.data.message || "Vectorization complete!");
+      // Refetch the graph to update the nodes with their new embeddings
+      fetchGraphData();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Error vectorizing graph:", error.message);
+        setVectorizeMessage("Error vectorizing graph");
+      } else {
+        console.error("An unknown error occurred:", error);
+        setVectorizeMessage("Error vectorizing graph");
+      }
     }
-  }, [fileContent]);
+    finally {
+      setVectorizing(false);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <div className="flex-1 container mx-auto p-8">
-        <button 
+        <button
           onClick={() => router.push("/pages/connect-repo")}
           className="mb-4 p-2 bg-blue-500 text-white rounded"
         >
           Back to Connect Repo
         </button>
+
+        {/* Vectorize Button */}
+        <button
+          onClick={handleVectorize}
+          className="mb-4 p-2 bg-green-500 text-white rounded"
+          disabled={vectorizing}
+        >
+          {vectorizing ? "Vectorizing..." : "Vectorize"}
+        </button>
+        {vectorizeMessage && (
+          <div className="p-2 bg-gray-200 rounded mb-4">{vectorizeMessage}</div>
+        )}
+
         <Card className="p-6 mb-8">
           <h1 className="text-3xl font-bold mb-2">Repository Knowledge Graph</h1>
           <p className="text-muted-foreground">
@@ -152,7 +186,9 @@ export default function RepoStructure() {
           </div>
         )}
 
-        {error && <div className="p-4 bg-destructive/10 text-destructive rounded-md">{error}</div>}
+        {error && (
+          <div className="p-4 bg-destructive/10 text-destructive rounded-md">{error}</div>
+        )}
 
         {!loading && !error && (
           <div className="h-[800px] bg-card rounded-lg shadow-xl overflow-hidden relative">
@@ -162,14 +198,14 @@ export default function RepoStructure() {
               nodeColor={(node) => {
                 const typedNode = node as Node;
                 return selectedNode?.id === typedNode.id
-                  ? "#ff0000" // Highlight selected node in red
+                  ? "#ff0000"
                   : typedNode.type === "Repo_Url"
-                  ? "#003366" // Dark Blue for Root Folder/Dir
+                  ? "#003366"
                   : typedNode.type === "Dir_Url"
-                  ? "#4CAF50" // Medium Green for Folders
+                  ? "#4CAF50"
                   : typedNode.type === "File_Url"
-                  ? "#FF9800" // Orange for Files
-                  : "#003366"; // Default color for other types
+                  ? "#FF9800"
+                  : "#003366";
               }}
               nodeRelSize={6}
               linkWidth={2}
@@ -180,7 +216,7 @@ export default function RepoStructure() {
               onNodeClick={(node) => handleNodeClick(node as Node)}
               linkColor={() => "#94a3b8"}
             />
-            {/* Legend for node colors */}
+            {/* Legend */}
             <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
               <h3 className="font-semibold">Node Color Legend</h3>
               <div className="flex flex-col mt-2">
@@ -217,64 +253,94 @@ export default function RepoStructure() {
             </DialogHeader>
 
             <Tabs defaultValue="details" className="mt-4">
-  <TabsList className="grid w-full grid-cols-3"> {/* Change grid-cols-2 to grid-cols-3 */}
-    <TabsTrigger value="details">Details</TabsTrigger>
-    {selectedNode?.type === "File_Url" && <TabsTrigger value="content">Content</TabsTrigger>}
-    <TabsTrigger value="codeSummary">Code Summary</TabsTrigger> {/* New Tab */}
-  </TabsList>
+              <TabsList className="grid w-full grid-cols-5">
+                <TabsTrigger value="details">Details</TabsTrigger>
+                {selectedNode?.type === "File_Url" && (
+                  <TabsTrigger value="content">Content</TabsTrigger>
+                )}
+                <TabsTrigger value="codeSummary">Code Summary</TabsTrigger>
+                {selectedNode?.type === "File_Url" && (
+                  <TabsTrigger value="contentVector">Content Vector</TabsTrigger>
+                )}
+                {selectedNode?.type === "File_Url" && (
+                  <TabsTrigger value="summaryVector">Summary Vector</TabsTrigger>
+                )}
+              </TabsList>
 
-  <TabsContent value="details" className="mt-4">
-    <div className="space-y-4">
-      <div>
-        <h3 className="font-semibold mb-1">Type</h3>
-        <p className="text-muted-foreground">
-          {selectedNode?.type === "File_Url" && "File"}
-          {selectedNode?.type === "Dir_Url" && "Directory"}
-          {selectedNode?.type === "Repo_Url" && "Repository"}
-        </p>
-      </div>
-      <div>
-        <h3 className="font-semibold mb-1">Path</h3>
-      </div>
-      {selectedNode?.type === "File_Url" && (
-        <div>
-          <a
-            href={selectedNode.id}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            Open in GitHub ↗
-          </a>
-        </div>
-      )}
-    </div>
-  </TabsContent>
+              <TabsContent value="details" className="mt-4">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold mb-1">Type</h3>
+                    <p className="text-muted-foreground">
+                      {selectedNode?.type === "File_Url" && "File"}
+                      {selectedNode?.type === "Dir_Url" && "Directory"}
+                      {selectedNode?.type === "Repo_Url" && "Repository"}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">Path</h3>
+                    <p>{selectedNode?.url}</p>
+                  </div>
+                  {selectedNode?.type === "File_Url" && (
+                    <div>
+                      <a
+                        href={selectedNode.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        Open in GitHub ↗
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
 
-  {selectedNode?.type === "File_Url" && (
-    <TabsContent value="content" className="mt-4">
-      {isLoadingContent ? (
-        <div className="flex items-center justify-center p-4">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </div>
-      ) : (
-        <pre className="bg-muted p-4 rounded-md overflow-x-auto max-h-[500px] overflow-y-auto">
-          <code>{fileContent}</code>
-        </pre>
-      )}
-    </TabsContent>
-  )}
+              {selectedNode?.type === "File_Url" && (
+                <TabsContent value="content" className="mt-4">
+                  {isLoadingContent ? (
+                    <div className="flex items-center justify-center p-4">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    </div>
+                  ) : (
+                    <pre className="bg-muted p-4 rounded-md overflow-x-auto max-h-[500px] overflow-y-auto">
+                      <code>{fileContent}</code>
+                    </pre>
+                  )}
+                </TabsContent>
+              )}
 
-  <TabsContent value="codeSummary" className="mt-4">
-    <div className="p-4 bg-muted rounded-md overflow-y-auto max-h-[500px]">
-      <ReactMarkdown className="prose max-w-none" remarkPlugins={[remarkGfm]}>
-        {selectedNode?.codeSummary || "No summary available"}
-      </ReactMarkdown>
-    </div>
-  </TabsContent>
+              <TabsContent value="codeSummary" className="mt-4">
+                <div className="p-4 bg-muted rounded-md overflow-y-auto max-h-[500px]">
+                  <ReactMarkdown className="prose max-w-none" remarkPlugins={[remarkGfm]}>
+                    {selectedNode?.codeSummary || "No summary available"}
+                  </ReactMarkdown>
+                </div>
+              </TabsContent>
 
-</Tabs>
-
+              {selectedNode?.type === "File_Url" && (
+                <>
+                  <TabsContent value="contentVector" className="mt-4">
+                    {selectedNode?.contentEmbedding ? (
+                      <pre className="bg-muted p-2 rounded overflow-x-auto">
+                        {JSON.stringify(selectedNode.contentEmbedding, null, 2)}
+                      </pre>
+                    ) : (
+                      <p className="text-muted-foreground">No content vector available.</p>
+                    )}
+                  </TabsContent>
+                  <TabsContent value="summaryVector" className="mt-4">
+                    {selectedNode?.summaryEmbedding ? (
+                      <pre className="bg-muted p-2 rounded overflow-x-auto">
+                        {JSON.stringify(selectedNode.summaryEmbedding, null, 2)}
+                      </pre>
+                    ) : (
+                      <p className="text-muted-foreground">No summary vector available.</p>
+                    )}
+                  </TabsContent>
+                </>
+              )}
+            </Tabs>
           </DialogContent>
         </Dialog>
       </div>

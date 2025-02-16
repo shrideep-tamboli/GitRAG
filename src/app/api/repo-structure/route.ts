@@ -132,6 +132,8 @@ interface Node {
   label: string;
   type: string;
   codeSummary?: string;
+  contentEmbedding?: number[] | null;
+  summaryEmbedding?: number[] | null;
 }
 
 interface Link {
@@ -167,6 +169,8 @@ export async function GET() {
           label: startNode.label,
           type: startNode.type,
           codeSummary: startNode.codeSummary || "No summary available", // Include codeSummary
+          contentEmbedding: startNode.contentEmbedding || null,
+          summaryEmbedding: startNode.summaryEmbedding || null,
         });
         nodeSet.add(startNode.url);
       }
@@ -177,6 +181,8 @@ export async function GET() {
           label: endNode.label,
           type: endNode.type,
           codeSummary: endNode.codeSummary || "No summary available",
+          contentEmbedding: endNode.contentEmbedding || null,
+          summaryEmbedding: endNode.summaryEmbedding || null,
         });
         nodeSet.add(endNode.url);
       }
