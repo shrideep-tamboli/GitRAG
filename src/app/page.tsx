@@ -1,5 +1,4 @@
 "use client"
-import Image from "next/image";
 import { Network, Database, GitBranch, Brain } from 'lucide-react';
 import Button from "@/components/ui/button";
 
