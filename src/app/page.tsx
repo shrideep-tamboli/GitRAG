@@ -37,7 +37,7 @@ export default function Home() {
         <div className="flex gap-4 items-center flex-col sm:flex-row">
           <Button
             className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] bg-black transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            onClick={() => (window.location.href = "/pages/connect-repo")}
+            onClick={() => (window.location.href = "https://gitrag.in/pages/connect-repo")}
           >
             <GitBranch className="w-5 h-5" />
             Connect Git Repository
