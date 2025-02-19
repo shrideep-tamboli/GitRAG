@@ -46,8 +46,6 @@ export default function RepoStructure() {
   const [fileContent, setFileContent] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
-  const [vectorizing, setVectorizing] = useState(false);
-  const [vectorizeMessage, setVectorizeMessage] = useState("");
 
   // Fetch the knowledge graph data from the backend
   const fetchGraphData = async () => {
@@ -128,29 +126,6 @@ export default function RepoStructure() {
     []
   );
 
-  // Handle the "Vectorize" button click
-  const handleVectorize = async () => {
-    setVectorizing(true);
-    setVectorizeMessage("");
-    try {
-      const response = await axios.post("/api/vectorize");
-      setVectorizeMessage(response.data.message || "Vectorization complete!");
-      // Refetch the graph to update the nodes with their new embeddings
-      fetchGraphData();
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error("Error vectorizing graph:", error.message);
-        setVectorizeMessage("Error vectorizing graph");
-      } else {
-        console.error("An unknown error occurred:", error);
-        setVectorizeMessage("Error vectorizing graph");
-      }
-    }
-    finally {
-      setVectorizing(false);
-    }
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <div className="flex-1 container mx-auto p-8">
@@ -160,18 +135,6 @@ export default function RepoStructure() {
         >
           Back to Connect Repo
         </button>
-
-        {/* Vectorize Button */}
-        <button
-          onClick={handleVectorize}
-          className="mb-4 p-2 bg-green-500 text-white rounded"
-          disabled={vectorizing}
-        >
-          {vectorizing ? "Vectorizing..." : "Vectorize"}
-        </button>
-        {vectorizeMessage && (
-          <div className="p-2 bg-gray-200 rounded mb-4">{vectorizeMessage}</div>
-        )}
 
         <Card className="p-6 mb-8">
           <h1 className="text-3xl font-bold mb-2">Repository Knowledge Graph</h1>

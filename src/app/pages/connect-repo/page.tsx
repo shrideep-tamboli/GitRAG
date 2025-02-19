@@ -8,6 +8,7 @@ export default function ConnectRepo() {
   const [inputRepoUrl, setInputRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
   interface RepoItem {
     name: string;
     path: string;
@@ -17,7 +18,10 @@ export default function ConnectRepo() {
   }
   
   const [contents, setContents] = useState<RepoItem[]>([]);
-  
+  // New state for tracking vectorization status and messages
+  const [vectorizing, setVectorizing] = useState(false);
+  const [vectorizeMessage, setVectorizeMessage] = useState("");
+
   const router = useRouter();
 
   // Fetch the connected repository URL when the component mounts
@@ -35,7 +39,7 @@ export default function ConnectRepo() {
         } else {
           console.warn("No repoUrl found in the response.");
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (err instanceof Error) {
           console.error("Error fetching connected repository:", err.message);
         } else {
@@ -43,17 +47,17 @@ export default function ConnectRepo() {
         }
       }
     };
-  
+
     fetchConnectedRepo();
   }, []);
-  
 
   const handleConnect = async () => {
     setLoading(true);
     setError("");
     setContents([]);
-  
+
     try {
+      // Connect to the repository
       const response = await fetch("/api/connect-repo", {
         method: "POST",
         headers: {
@@ -61,20 +65,22 @@ export default function ConnectRepo() {
         },
         body: JSON.stringify({ url: inputRepoUrl }),
       });
-  
+
       const data = await response.json();
-  
+
       if (!response.ok) {
         throw new Error(data.error || "Failed to connect to the repository");
       }
-  
+
       if (data.message) {
         setError(data.message);
       } else {
+        // Save the repo structure and update UI state
         setContents(data);
         setRepoUrl(inputRepoUrl);
         setInputRepoUrl("");
-  
+
+        // Create/update the knowledge graph by sending the repo structure
         await fetch("/api/repo-structure", {
           method: "POST",
           headers: {
@@ -85,14 +91,27 @@ export default function ConnectRepo() {
             repoStructure: data
           }),
         });
-  
+
+        // Now that a KG exists, trigger vectorization
+        setVectorizing(true);
+        setVectorizeMessage("");
+        try {
+          const vectorizeRes = await fetch("/api/vectorize", { method: "POST" });
+          const vectorizeData = await vectorizeRes.json();
+          setVectorizeMessage(vectorizeData.message || "Vectorization complete!");
+        } catch (vectorizeError: unknown) {
+          console.error("Error vectorizing graph:", vectorizeError);
+          setVectorizeMessage("Error vectorizing graph");
+        } finally {
+          setVectorizing(false);
+        }
+
+        // After vectorization, navigate to the repository structure view
         router.push("/pages/repo-structure");
       }
-  
+
       console.log("Repository Structure:", data);
-      console.log('Received Repository Structure:', data);
-      console.log('Received Repo URL:', repoUrl);
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof Error) {
         console.error("Error connecting to repository:", err.message);
         setError(err.message);
@@ -104,7 +123,6 @@ export default function ConnectRepo() {
       setLoading(false);
     }
   };
-  
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen p-8">
@@ -119,15 +137,20 @@ export default function ConnectRepo() {
         />
         <button
           onClick={handleConnect}
-          disabled={loading}
+          disabled={loading || vectorizing}
           className={`rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center bg-foreground text-background h-10 px-4 ${
-            loading ? "opacity-50 cursor-not-allowed" : ""
+            loading || vectorizing ? "opacity-50 cursor-not-allowed" : ""
           }`}
         >
-          {loading ? "Connecting..." : "Connect"}
+          {loading
+            ? "Connecting..."
+            : vectorizing
+            ? "Vectorizing..."
+            : "Connect"}
         </button>
 
         {error && <p className="text-red-500 mt-4">{error}</p>}
+        {vectorizeMessage && <p className="mt-4">{vectorizeMessage}</p>}
 
         {contents.length > 0 && (
           <div className="mt-8 w-full max-w-2xl">
