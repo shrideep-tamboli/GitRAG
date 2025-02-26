@@ -139,7 +139,7 @@ export default function RepoStructure() {
     }))
 
     // Log the list of URLs
-    const urls = summaries.map((summary) => summary.url)
+    //const urls = summaries.map((summary) => summary.url)
     //console.log("List of URLs:", urls)
 
     const userMessage = chatInput
