@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { HfInference } from '@huggingface/inference';
 import neo4j from "neo4j-driver";
 
-
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY!);
 // Connect to Neo4j
 const driver = neo4j.driver(
