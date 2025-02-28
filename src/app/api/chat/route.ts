@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { HfInference } from "@huggingface/inference";
+import Groq from "groq-sdk";
+import { createClient } from '@supabase/supabase-js';
 
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY!);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 interface Summary {
   codeSummary: string;
@@ -58,16 +65,62 @@ export async function POST(request: Request) {
       .filter(summary => summary.summaryEmbedding !== null)
       .map(summary => {
         const score = cosineSimilarity(message_embedding, summary.summaryEmbedding!);
-        return { score, url: summary.url };
+        return { score, url: summary.url, codeSummary: summary.codeSummary };
       });
 
     // Sort the results in descending order based on the similarity score
     similarityResults.sort((a, b) => b.score - a.score);
 
-    // Log the results
-    console.log("Similarity Results (sorted descending):", similarityResults);
+    // Get the top 5 results
+    const topResults = similarityResults.slice(0, 5);
+    console.log("Top 5 Results:", topResults);
 
-    return NextResponse.json({ success: true, results: similarityResults });
+    // Format the context to include code summaries
+    const contextStr = topResults
+      .map(result => `[${result.url}]: ${result.codeSummary}`)
+      .join('\n');
+
+    // system prompt
+    const systemPrompt = `You are an assistant for question-answering tasks.
+                          Use the following pieces of retrieved context to answer the question.
+                          If you don't know the answer, just say that you don't know.
+                          Use three sentences maximum and keep the answer concise.
+                          Context: ${contextStr}`;
+
+    const response = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: body.message,
+        },
+      ],
+      model: "llama-3.3-70b-versatile",
+    });
+
+    console.log("Groq Response:", response.choices[0].message.content);
+
+    // Store chat data in Supabase
+    const { error: insertError } = await supabase
+      .from('chat_data')
+      .insert({
+        user_query: body.message,
+        bot_response: response.choices[0].message.content,
+        context_urls: topResults.map(result => result.url),
+        similarity_scores: topResults.map(result => ({
+          url: result.url,
+          score: result.score
+        }))
+      });
+
+    if (insertError) {
+      console.error('Error storing chat data:', insertError);
+    }
+
+    return NextResponse.json({ success: true, results: similarityResults, response: response.choices[0].message.content });
   } catch (error) {
     console.error("Error processing chat request:", error);
     return NextResponse.json(

@@ -155,7 +155,7 @@ export default function RepoStructure() {
     try {
       const response = await axios.post("/api/chat", payload)
       console.log("Chat response:", response.data)
-      const botReply = response.data.message || "No response message"
+      const botReply = response.data.response
       setMessages((prev) => [{ sender: "bot", text: botReply }, ...prev])
     } catch (err) {
       console.error("Error sending chat message:", err)
