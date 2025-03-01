@@ -107,7 +107,7 @@ export default function ConnectRepo() {
         }
 
         // After vectorization, navigate to the repository structure view
-        router.push("/pages/repo-structure");
+        router.push("/repo-structure");
       }
 
       console.log("Repository Structure:", data);
@@ -180,7 +180,7 @@ export default function ConnectRepo() {
         <h2 className="text-xl mb-4">Connected Repository</h2>
         <p className="mb-2">{repoUrl || "No repository connected."}</p>
         <button
-          onClick={() => router.push("/pages/repo-structure")}
+          onClick={() => router.push("/repo-structure")}
           className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors bg-blue-500 text-white h-10 px-4"
         >
           View Repository Structure

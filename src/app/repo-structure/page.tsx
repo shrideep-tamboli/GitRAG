@@ -167,7 +167,7 @@ export default function RepoStructure() {
     <div className="flex flex-col min-h-screen bg-background">
       <div className="flex-1 container mx-auto p-8">
         <button
-          onClick={() => router.push("/pages/connect-repo")}
+          onClick={() => router.push("/connect-repo")}
           className="mb-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
         >
           ← Back to Connect Repo
