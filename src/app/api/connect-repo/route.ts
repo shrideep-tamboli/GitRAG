@@ -1,16 +1,33 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
-import Groq from "groq-sdk";
 import { ChatGroq } from "@langchain/groq";
 import { SystemMessage } from "@langchain/core/messages";
 import { get_encoding } from "tiktoken";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Define an interface for the metadata returned from the code summary.
+interface CodeSummaryMetadata {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
 
 const blacklistedKeywords = ["LICENSE", "git", "docker", "Makefile", "config", "package"];
-const blacklistedDirKeywords = [".git", ".github", "docs", "tests", "example", "images", "docker", "sdks", "dev", "events", "extensions", "deployment", "public", "venv"];
+const blacklistedDirKeywords = [
+  ".git",
+  ".github",
+  "docs",
+  "tests",
+  "example",
+  "images",
+  "docker",
+  "sdks",
+  "dev",
+  "events",
+  "extensions",
+  "deployment",
+  "public",
+  "venv",
+];
 
 // Helper function to check if an item is blacklisted
 const isBlacklisted = (itemName: string, itemPath: string): boolean => {
@@ -36,8 +53,14 @@ function countTokens(text: string): number {
   return encoding.encode(text).length;
 }
 
-// Function to get code summary using Groq
-async function getCodeSummary(code: string): Promise<{ summary: string; metadata: any; current_input_token: number }> {
+// Function to get code summary using Groq.
+// Replaced "any" with the proper CodeSummaryMetadata type.
+// Note the metadata is now coerced to null if undefined.
+async function getCodeSummary(code: string): Promise<{
+  summary: string;
+  metadata: CodeSummaryMetadata | null;
+  current_input_token: number;
+}> {
   try {
     // Add delay to avoid rate limits
     await delay(1000); // 1 second delay between requests
@@ -82,7 +105,7 @@ ${code}`;
 
     return {
       summary: res.content.toString(),
-      metadata: res.usage_metadata,
+      metadata: res.usage_metadata ?? null,
       current_input_token,
     };
   } catch (error) {
@@ -146,11 +169,8 @@ interface RepositoryItem {
   type: "file" | "dir";
   download_url: string | null;
   codeSummary: string | null;
-  metadata?: {
-    input_tokens: number;
-    output_tokens: number;
-    total_tokens: number;
-  };
+  // Allow metadata to be either CodeSummaryMetadata, null, or undefined.
+  metadata?: CodeSummaryMetadata | null;
   current_input_token?: number;
   total_input_token?: number;
 }
@@ -200,7 +220,11 @@ const fetchRepositoryContents = async (
         };
 
         // Only process files with specific extensions
-        if (item.type === "file" && item.download_url && /\.(ts|tsx|js|jsx|py|java|cpp|c|go|rs|php)$/.test(item.name)) {
+        if (
+          item.type === "file" &&
+          item.download_url &&
+          /\.(ts|tsx|js|jsx|py|java|cpp|c|go|rs|php)$/.test(item.name)
+        ) {
           const codeContent = await fetchCodeContent(item.download_url);
           if (codeContent) {
             console.log(`Processing file: ${item.name}`);
@@ -258,14 +282,20 @@ export async function POST(req: Request) {
     const groqKey = process.env.GROQ_API_KEY;
 
     if (!url || !token || !groqKey) {
-      return NextResponse.json({ error: "Missing required parameters: url, token, or GROQ_API_KEY" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required parameters: url, token, or GROQ_API_KEY" },
+        { status: 400 }
+      );
     }
 
     // Start with a running token total of 0.
     const contents = await fetchRepositoryContents(url, token, "", { sum: 0 });
 
     if (!contents || contents.length === 0) {
-      return NextResponse.json({ message: "Repository is empty or no non-blacklisted items found" }, { status: 200 });
+      return NextResponse.json(
+        { message: "Repository is empty or no non-blacklisted items found" },
+        { status: 200 }
+      );
     }
 
     // Sort the repository items in ascending order by total_tokens.
@@ -340,10 +370,10 @@ export async function POST(req: Request) {
     if (error instanceof Error) {
       console.error("Error processing request:", error.message);
       return NextResponse.json(
-        { 
-          error: "Internal Server Error", 
+        {
+          error: "Internal Server Error",
           details: error.message,
-          processingTime: Number(processingTime.toFixed(2))
+          processingTime: Number(processingTime.toFixed(2)),
         },
         { status: 500 }
       );
