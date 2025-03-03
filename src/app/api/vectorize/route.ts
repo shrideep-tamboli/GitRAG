@@ -66,8 +66,8 @@ export async function POST() {
       const summaryEmbedding = await generateEmbeddings(codeSummaryText);
       
       // Log the embeddings to console
-      console.log(`Content embedding for node ${fileUrl}:`, contentEmbedding);
-      console.log(`Summary embedding for node ${fileUrl}:`, summaryEmbedding);
+      //console.log(`Content embedding for node ${fileUrl}:`, contentEmbedding);
+      //console.log(`Summary embedding for node ${fileUrl}:`, summaryEmbedding);
       
       // Update the node in Neo4j with the new embeddings
       await session.run(

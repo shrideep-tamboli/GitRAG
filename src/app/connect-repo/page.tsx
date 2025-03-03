@@ -15,6 +15,11 @@ export default function ConnectRepo() {
     type: string;
     download_url: string | null;
     codeSummary?: string | null;
+    metadata?: {
+      input_tokens: number;
+      output_tokens: number;
+      total_tokens: number;
+    } | null;
   }
   
   const [contents, setContents] = useState<RepoItem[]>([]);
@@ -75,8 +80,22 @@ export default function ConnectRepo() {
       if (data.message) {
         setError(data.message);
       } else {
+        // Log the processing time
+        console.log(`Repository processing completed in ${data.processingTime} seconds`);
+        
+        // Log token usage for each file
+        data.contents.forEach((item: RepoItem) => {
+          if (item.metadata) {
+            console.log(`Token usage for ${item.name}:`, {
+              input_tokens: item.metadata.input_tokens,
+              output_tokens: item.metadata.output_tokens,
+              total_tokens: item.metadata.total_tokens
+            });
+          }
+        });
+
         // Save the repo structure and update UI state
-        setContents(data);
+        setContents(data.contents);
         setRepoUrl(inputRepoUrl);
         setInputRepoUrl("");
 
@@ -88,7 +107,7 @@ export default function ConnectRepo() {
           },
           body: JSON.stringify({ 
             repoUrl: inputRepoUrl,
-            repoStructure: data
+            repoStructure: data.contents
           }),
         });
 
@@ -110,7 +129,7 @@ export default function ConnectRepo() {
         router.push("/repo-structure");
       }
 
-      console.log("Repository Structure:", data);
+      console.log("Repository Structure:", data.contents);
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.error("Error connecting to repository:", err.message);

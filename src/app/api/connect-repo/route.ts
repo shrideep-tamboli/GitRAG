@@ -1,78 +1,90 @@
-import { NextResponse } from "next/server"
-import axios from "axios"
-import Groq from "groq-sdk"
+import { NextResponse } from "next/server";
+import axios from "axios";
+import Groq from "groq-sdk";
+import { ChatGroq } from "@langchain/groq";
+import { SystemMessage } from "@langchain/core/messages";
+import { get_encoding } from "tiktoken";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
-})
+});
 
-const blacklistedKeywords = ["LICENSE", "git", "docker", "Makefile","config","package"]
-const blacklistedDirKeywords = [ ".git", ".github", "docs", "tests", "example", "images", "docker", "sdks", "dev", "events", "extensions", "deployment", "public", "venv" ];
+const blacklistedKeywords = ["LICENSE", "git", "docker", "Makefile", "config", "package"];
+const blacklistedDirKeywords = [".git", ".github", "docs", "tests", "example", "images", "docker", "sdks", "dev", "events", "extensions", "deployment", "public", "venv"];
 
 // Helper function to check if an item is blacklisted
 const isBlacklisted = (itemName: string, itemPath: string): boolean => {
-  if (itemName.startsWith(".")) return true
+  if (itemName.startsWith(".")) return true;
 
   for (const keyword of blacklistedKeywords) {
-    if (itemName.toLowerCase().includes(keyword.toLowerCase())) return true
+    if (itemName.toLowerCase().includes(keyword.toLowerCase())) return true;
   }
 
   for (const keyword of blacklistedDirKeywords) {
-    if (itemPath.toLowerCase().includes(keyword.toLowerCase())) return true
+    if (itemPath.toLowerCase().includes(keyword.toLowerCase())) return true;
   }
 
-  return false
-}
-
-// Helper function to truncate code to a reasonable size
-function truncateCode(code: string, maxLength = 2000): string {
-  if (code.length <= maxLength) return code
-  return code.slice(0, maxLength) + "\n... (truncated for length)"
-}
+  return false;
+};
 
 // Add delay between API calls
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Use Tiktoken for token counting (synchronous)
+function countTokens(text: string): number {
+  const encoding = get_encoding("cl100k_base");
+  return encoding.encode(text).length;
+}
 
 // Function to get code summary using Groq
-async function getCodeSummary(code: string): Promise<string> {
+async function getCodeSummary(code: string): Promise<{ summary: string; metadata: any; current_input_token: number }> {
   try {
-    // Truncate code before sending to API
-    const truncatedCode = truncateCode(code)
-
     // Add delay to avoid rate limits
-    await delay(1000) // 1 second delay between requests
+    await delay(1000); // 1 second delay between requests
 
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content: `Analyze the provided code and return a detailed summary in a valid JSON format. Your response should include (but is not limited to) the following keys:
+    const system_prompt = `Analyze the provided code and return a detailed summary in a valid JSON format. Your response should include (but is not limited to) the following keys:
       
-      {
-        "overall_summary": "A comprehensive explanation of what the code does, its purpose, and high-level functionality.",
-        "functions": "A list of all the functions defined in the code along with a brief description of each function’s purpose, parameters, and return values (if identifiable).",
-        "classes": "If applicable, a list of classes defined in the code, along with their key methods and attributes.",
-        "variables": "Important global or significant variables used in the code, including constants.",
-        "dependencies": {
-          "external_libraries": "Any external libraries, frameworks, or modules imported and used in the code.",
-          "file_dependencies": "Any other files or modules (both frontend and backend) that the code depends on for data (e.g., files from which data is sent or received, API endpoints, etc.)."
-        },
-        "requests": "Identify and list all HTTP requests (GET, POST, PUT, DELETE, etc.) made in the code along with their endpoints and a brief description of their purpose.",
-        "file_system_operations": "Any file system operations performed (reading/writing files, accessing directories, etc.).",
-        "additional_notes": "Any other relevant details or observations that may help in understanding the code (such as design patterns, error handling, comments, etc.)."
-      }
-      
-      Please ensure that the output is valid JSON and use the keys above as a guideline. Do not include any extra keys or text outside the JSON structure.
-      
-      \n\nHere is the code to analyze:\n\n${truncatedCode}`
-        },
-      ],
-      model: "llama-3.3-70b-versatile",
-      // Add temperature and max tokens to control response size
-      temperature: 0.5,
-    })
+{
+  "overall_summary": "A comprehensive explanation of what the code does, its purpose, and high-level functionality.",
+  "functions": "A list of all the functions defined in the code along with a brief description of each function's purpose, parameters, and return values (if identifiable).",
+  "classes": "If applicable, a list of classes defined in the code, along with their key methods and attributes.",
+  "variables": "Important global or significant variables used in the code, including constants.",
+  "dependencies": {
+    "external_libraries": "Any external libraries, frameworks, or modules imported and used in the code.",
+    "file_dependencies": "Any other files or modules (both frontend and backend) that the code depends on for data (e.g., files from which data is sent or received, API endpoints, etc.)."
+  },
+  "requests": "Identify and list all HTTP requests (GET, POST, PUT, DELETE, etc.) made in the code along with their endpoints and a brief description of their purpose.",
+  "file_system_operations": "Any file system operations performed (reading/writing files, accessing directories, etc.).",
+  "additional_notes": "Any other relevant details or observations that may help in understanding the code (such as design patterns, error handling, comments, etc.)."
+}
 
-    return completion.choices[0]?.message?.content || "No summary available"
+Please ensure that the output is valid JSON and use the keys above as a guideline. Do not include any extra keys or text outside the JSON structure.
+
+Here is the code to analyze:
+
+${code}`;
+
+    const model = new ChatGroq({
+      model: "gemma2-9b-it",
+      temperature: 0,
+    });
+
+    // Use our custom countTokens function for a consistent token count.
+    const current_input_token = countTokens(code);
+    console.log("Number of Input Tokens", current_input_token);
+
+    const messages = [new SystemMessage(system_prompt)];
+
+    const res = await model.invoke(messages);
+
+    console.log("Code Summary", res.content.toString());
+    console.log("Token Usage", res.usage_metadata);
+
+    return {
+      summary: res.content.toString(),
+      metadata: res.usage_metadata,
+      current_input_token,
+    };
   } catch (error) {
     if (error instanceof Error) {
       if (
@@ -83,50 +95,74 @@ async function getCodeSummary(code: string): Promise<string> {
         error.response.status === 413
       ) {
         console.warn("Rate limit hit, returning simplified summary");
-        return "File content too large to summarize";
+        return {
+          summary: "File content too large to summarize",
+          metadata: null,
+          current_input_token: 0,
+        };
       }
       console.error("Error getting code summary:", error.message);
-      return "Failed to generate summary";
+      return {
+        summary: "Failed to generate summary",
+        metadata: null,
+        current_input_token: 0,
+      };
     } else {
       console.error("Unexpected error getting code summary:", error);
-      return "Failed to generate summary";
+      return {
+        summary: "Failed to generate summary",
+        metadata: null,
+        current_input_token: 0,
+      };
     }
-  }  
+  }
 }
 
 // Function to fetch code content from URL with size limit
-async function fetchCodeContent(url: string, maxSize = 100000): Promise<string> {
+async function fetchCodeContent(url: string): Promise<string> {
   try {
     const response = await axios.get(url, {
-      maxContentLength: maxSize,
       timeout: 5000, // 5 second timeout
-    })
-    return response.data
+    });
+    return response.data;
   } catch (error) {
     if (error instanceof Error) {
       if ("code" in error && error.code === "ECONNABORTED") {
         console.warn("Request timeout or content too large:", url);
         return "";
-      }      
+      }
       console.error("Error fetching code content:", error.message);
       return "";
     } else {
       console.error("Unexpected error fetching code content:", error);
       return "";
     }
-  }  
+  }
 }
 
 interface RepositoryItem {
   name: string;
   path: string;
-  type: 'file' | 'dir';  // GitHub API returns these types
+  type: "file" | "dir";
   download_url: string | null;
   codeSummary: string | null;
+  metadata?: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
+  current_input_token?: number;
+  total_input_token?: number;
 }
 
-// Recursive function to fetch repository contents
-const fetchRepositoryContents = async (repoUrl: string, token: string, path = ""): Promise<RepositoryItem[]> => {
+// Recursive function to fetch repository contents with a running token total.
+// We pass a mutable object to hold the running total across recursive calls.
+const fetchRepositoryContents = async (
+  repoUrl: string,
+  token: string,
+  path = "",
+  runningInputTokenSum: { sum: number } = { sum: 0 }
+): Promise<RepositoryItem[]> => {
   const repoItems: RepositoryItem[] = [];
 
   try {
@@ -158,7 +194,7 @@ const fetchRepositoryContents = async (repoUrl: string, token: string, path = ""
         const repoItem: RepositoryItem = {
           name: item.name,
           path: item.path,
-          type: item.type as 'file' | 'dir',
+          type: item.type as "file" | "dir",
           download_url: item.download_url || null,
           codeSummary: null,
         };
@@ -167,14 +203,23 @@ const fetchRepositoryContents = async (repoUrl: string, token: string, path = ""
         if (item.type === "file" && item.download_url && /\.(ts|tsx|js|jsx|py|java|cpp|c|go|rs|php)$/.test(item.name)) {
           const codeContent = await fetchCodeContent(item.download_url);
           if (codeContent) {
-            repoItem.codeSummary = await getCodeSummary(codeContent);
+            console.log(`Processing file: ${item.name}`);
+            const { summary, metadata, current_input_token } = await getCodeSummary(codeContent);
+            console.log(`Token usage for ${item.name}:`, metadata);
+            // Update the running total using the same token count method.
+            runningInputTokenSum.sum += current_input_token;
+            repoItem.metadata = metadata;
+            repoItem.codeSummary = summary;
+            repoItem.current_input_token = current_input_token;
+            repoItem.total_input_token = runningInputTokenSum.sum;
+            console.log(`Total Input Tokens so far: ${runningInputTokenSum.sum}`);
           }
         }
 
         repoItems.push(repoItem);
 
         if (item.type === "dir") {
-          const subdirContents = await fetchRepositoryContents(repoUrl, token, item.path);
+          const subdirContents = await fetchRepositoryContents(repoUrl, token, item.path, runningInputTokenSum);
           repoItems.push(...subdirContents);
         }
       }
@@ -205,30 +250,101 @@ const fetchRepositoryContents = async (repoUrl: string, token: string, path = ""
   return repoItems;
 };
 
-
 export async function POST(req: Request) {
+  const startTime = performance.now();
   try {
-    const { url } = await req.json()
-    const token = process.env.git_api_key
-    const groqKey = process.env.GROQ_API_KEY
+    const { url } = await req.json();
+    const token = process.env.git_api_key;
+    const groqKey = process.env.GROQ_API_KEY;
 
     if (!url || !token || !groqKey) {
-      return NextResponse.json({ error: "Missing required parameters: url, token, or GROQ_API_KEY" }, { status: 400 })
+      return NextResponse.json({ error: "Missing required parameters: url, token, or GROQ_API_KEY" }, { status: 400 });
     }
 
-    const contents = await fetchRepositoryContents(url, token)
+    // Start with a running token total of 0.
+    const contents = await fetchRepositoryContents(url, token, "", { sum: 0 });
 
     if (!contents || contents.length === 0) {
-      return NextResponse.json({ message: "Repository is empty or no non-blacklisted items found" }, { status: 200 })
+      return NextResponse.json({ message: "Repository is empty or no non-blacklisted items found" }, { status: 200 });
     }
 
-    console.log("Repo_Structure:", contents)
-    return NextResponse.json(contents)
+    // Sort the repository items in ascending order by total_tokens.
+    // For items without metadata, we default total_tokens to 0.
+    const sortedContents = contents.sort((a, b) => {
+      const tokensA = a.metadata?.total_tokens ?? 0;
+      const tokensB = b.metadata?.total_tokens ?? 0;
+      return tokensA - tokensB;
+    });
+
+    const BATCH_TOKEN_LIMIT = 15000;
+    const batches: RepositoryItem[][] = [];
+    let currentBatch: RepositoryItem[] = [];
+    let currentBatchTokenSum = 0;
+
+    for (const item of sortedContents) {
+      const tokens = item.metadata?.total_tokens ?? 0;
+
+      // Check if adding this item will exceed the batch limit.
+      if (currentBatchTokenSum + tokens <= BATCH_TOKEN_LIMIT) {
+        currentBatch.push(item);
+        currentBatchTokenSum += tokens;
+      } else {
+        // Push the current batch and start a new one.
+        batches.push(currentBatch);
+        currentBatch = [item];
+        currentBatchTokenSum = tokens;
+      }
+    }
+
+    // Add any remaining items in the last batch.
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    console.log("Batches:", batches);
+
+    const endTime = performance.now();
+    const processingTime = (endTime - startTime) / 1000; // Convert to seconds
+    console.log(`Total processing time: ${processingTime.toFixed(2)} seconds`);
+
+    // Calculate total tokens from the metadata if needed.
+    const tokenTotals = sortedContents.reduce(
+      (acc, item) => {
+        if (item.metadata) {
+          acc.totalInputTokens += item.metadata.input_tokens;
+          acc.totalOutputTokens += item.metadata.output_tokens;
+          acc.totalTokens += item.metadata.total_tokens;
+        }
+        return acc;
+      },
+      {
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+      }
+    );
+
+    console.log("Total token usage:", tokenTotals);
+
+    return NextResponse.json({
+      contents: sortedContents,
+      processingTime: Number(processingTime.toFixed(2)),
+      tokenTotals,
+      batches,
+    });
   } catch (error) {
+    const endTime = performance.now();
+    const processingTime = (endTime - startTime) / 1000;
+    console.log(`Total processing time (with error): ${processingTime.toFixed(2)} seconds`);
+
     if (error instanceof Error) {
       console.error("Error processing request:", error.message);
       return NextResponse.json(
-        { error: "Internal Server Error", details: error.message },
+        { 
+          error: "Internal Server Error", 
+          details: error.message,
+          processingTime: Number(processingTime.toFixed(2))
+        },
         { status: 500 }
       );
     } else {
@@ -238,6 +354,5 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-  }  
+  }
 }
-
