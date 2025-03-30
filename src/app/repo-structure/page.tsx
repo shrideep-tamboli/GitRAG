@@ -51,6 +51,7 @@ export default function RepoStructure() {
   const [chatInput, setChatInput] = useState("")
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const messagesStartRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
 
   const fetchGraphData = useCallback(async () => {
     setLoading(true)
@@ -82,6 +83,13 @@ export default function RepoStructure() {
 
   useEffect(() => {
     messagesStartRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [])
+
+  useEffect(() => {
+    setWidth(window.innerWidth)
+    const handleResize = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   const printNodeDetails = useCallback((node: Node) => {
@@ -169,8 +177,7 @@ export default function RepoStructure() {
       // Try to parse as JSON if it's in JSON format
       const jsonObj = JSON.parse(summary)
       return jsonObj
-    } catch (e) {
-      // If not JSON, return the original string
+    } catch {
       return summary
     }
   }
@@ -277,7 +284,7 @@ export default function RepoStructure() {
                   backgroundColor="#f8f9fa"
                   onNodeClick={(node) => handleNodeClick(node as Node)}
                   linkColor={() => "#94a3b8"}
-                  width={isSideCanvasOpen ? window.innerWidth / 2 : window.innerWidth}
+                  width={isSideCanvasOpen ? width / 2 : width}
                 />
                 <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
                   <h3 className="font-semibold">Node Color Legend</h3>
