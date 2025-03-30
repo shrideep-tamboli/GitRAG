@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import dynamic from "next/dynamic"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, Send } from "lucide-react"
+import { Loader2, Send, X } from "lucide-react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
@@ -47,7 +46,7 @@ export default function RepoStructure() {
   const [error, setError] = useState("")
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [fileContent, setFileContent] = useState<string>("")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSideCanvasOpen, setIsSideCanvasOpen] = useState(false)
   const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [chatInput, setChatInput] = useState("")
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -96,7 +95,7 @@ export default function RepoStructure() {
   const handleNodeClick = useCallback(
     async (node: Node) => {
       setSelectedNode(node)
-      setIsDialogOpen(true)
+      setIsSideCanvasOpen(true)
       setFileContent("")
 
       printNodeDetails(node)
@@ -135,12 +134,8 @@ export default function RepoStructure() {
     const summaries = graphData.nodes.map((node) => ({
       codeSummary: node.codeSummary || "",
       summaryEmbedding: node.summaryEmbedding || null,
-      url: node.id
+      url: node.id,
     }))
-
-    // Log the list of URLs
-    //const urls = summaries.map((summary) => summary.url)
-    //console.log("List of URLs:", urls)
 
     const userMessage = chatInput
     setMessages((prev) => [{ sender: "user", text: userMessage }, ...prev])
@@ -160,6 +155,23 @@ export default function RepoStructure() {
     } catch (err) {
       console.error("Error sending chat message:", err)
       setMessages((prev) => [{ sender: "bot", text: "Error: Failed to get response." }, ...prev])
+    }
+  }
+
+  const closeSideCanvas = () => {
+    setIsSideCanvasOpen(false)
+    setSelectedNode(null)
+  }
+
+  // Function to format JSON for better readability
+  const formatCodeSummary = (summary: string) => {
+    try {
+      // Try to parse as JSON if it's in JSON format
+      const jsonObj = JSON.parse(summary)
+      return jsonObj
+    } catch (e) {
+      // If not JSON, return the original string
+      return summary
     }
   }
 
@@ -229,152 +241,192 @@ export default function RepoStructure() {
         {error && <div className="p-4 bg-destructive/10 text-destructive rounded-md">{error}</div>}
 
         {!loading && !error && (
-          <div className="h-[800px] bg-card rounded-lg shadow-xl overflow-hidden relative">
-            <ForceGraph3D
-              graphData={graphData}
-              nodeLabel={(node) => (node as Node).label}
-              nodeColor={(node) => {
-                const typedNode = node as Node
-                return selectedNode?.id === typedNode.id
-                  ? "#ff0000"
-                  : typedNode.type === "Repo_Url"
-                    ? "#003366"
-                    : typedNode.type === "Dir_Url"
-                      ? "#4CAF50"
-                      : typedNode.type === "File_Url"
-                        ? "#FF9800"
-                        : "#003366"
+          <div className="flex h-[800px]">
+            {/* Graph container - shrinks to 50% width when side canvas is open */}
+            <div
+              className={`bg-card rounded-lg shadow-xl overflow-hidden relative transition-all duration-300 ease-in-out ${
+                isSideCanvasOpen ? "w-1/2" : "w-full"
+              }`}
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
               }}
-              nodeRelSize={6}
-              linkWidth={2}
-              linkDirectionalParticles={4}
-              linkDirectionalParticleWidth={2}
-              linkDirectionalParticleSpeed={0.005}
-              backgroundColor="#f8f9fa"
-              onNodeClick={(node) => handleNodeClick(node as Node)}
-              linkColor={() => "#94a3b8"}
-            />
-            <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
-              <h3 className="font-semibold">Node Color Legend</h3>
-              <div className="flex flex-col mt-2">
-                <div className="flex items-center">
-                  <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-                  <span>Selected Node</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-4 h-4 bg-blue-800 rounded-full mr-2"></div>
-                  <span>Root Folder</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
-                  <span>Folder</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
-                  <span>File</span>
+            >
+              <div className="w-full h-full">
+                <ForceGraph3D
+                  graphData={graphData}
+                  nodeLabel={(node) => (node as Node).label}
+                  nodeColor={(node) => {
+                    const typedNode = node as Node
+                    return selectedNode?.id === typedNode.id
+                      ? "#ff0000"
+                      : typedNode.type === "Repo_Url"
+                        ? "#003366"
+                        : typedNode.type === "Dir_Url"
+                          ? "#4CAF50"
+                          : typedNode.type === "File_Url"
+                            ? "#FF9800"
+                            : "#003366"
+                  }}
+                  nodeRelSize={6}
+                  linkWidth={2}
+                  linkDirectionalParticles={4}
+                  linkDirectionalParticleWidth={2}
+                  linkDirectionalParticleSpeed={0.005}
+                  backgroundColor="#f8f9fa"
+                  onNodeClick={(node) => handleNodeClick(node as Node)}
+                  linkColor={() => "#94a3b8"}
+                  width={isSideCanvasOpen ? window.innerWidth / 2 : window.innerWidth}
+                />
+                <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
+                  <h3 className="font-semibold">Node Color Legend</h3>
+                  <div className="flex flex-col mt-2">
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+                      <span>Selected Node</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 bg-blue-800 rounded-full mr-2"></div>
+                      <span>Root Folder</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
+                      <span>Folder</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
+                      <span>File</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* Side Canvas */}
+            {isSideCanvasOpen && selectedNode && (
+              <div className="w-1/2 bg-card rounded-lg shadow-xl ml-4 overflow-hidden flex flex-col">
+                <div className="p-4 border-b flex justify-between items-center">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    {selectedNode?.type === "File_Url" && "📄"}
+                    {selectedNode?.type === "Dir_Url" && "📁"}
+                    {selectedNode?.type === "Repo_Url" && "📦"}
+                    {selectedNode?.label}
+                  </h2>
+                  <button onClick={closeSideCanvas} className="p-1 hover:bg-muted rounded-full" aria-label="Close">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 p-4">
+                  <Tabs defaultValue="details" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="details">Details</TabsTrigger>
+                      {selectedNode?.type === "File_Url" && <TabsTrigger value="content">Content</TabsTrigger>}
+                      <TabsTrigger value="codeSummary">Code Summary</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="details" className="mt-4">
+                      <div className="custom-scrollbar h-[600px] p-4 space-y-4">
+                        <div>
+                          <h3 className="font-semibold mb-1">Type</h3>
+                          <p className="text-muted-foreground">
+                            {selectedNode?.type === "File_Url" && "File"}
+                            {selectedNode?.type === "Dir_Url" && "Directory"}
+                            {selectedNode?.type === "Repo_Url" && "Repository"}
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold mb-1">Path</h3>
+                          <p>{selectedNode?.url}</p>
+                        </div>
+                        {selectedNode?.type === "File_Url" && (
+                          <div>
+                            <a
+                              href={selectedNode.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              Open in GitHub ↗
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+
+                    {selectedNode?.type === "File_Url" && (
+                      <TabsContent value="content" className="mt-4">
+                        {isLoadingContent ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                          </div>
+                        ) : (
+                          <div className="custom-scrollbar h-[600px]">
+                            <pre className="bg-muted p-4 rounded-md">
+                              <code>{fileContent}</code>
+                            </pre>
+                          </div>
+                        )}
+                      </TabsContent>
+                    )}
+
+                    <TabsContent value="codeSummary" className="mt-4">
+                      <div className="custom-scrollbar h-[600px]">
+                        <div className="p-6 bg-muted rounded-md">
+                          {selectedNode?.codeSummary ? (
+                            <div className="prose prose-sm max-w-none dark:prose-invert">
+                              {typeof selectedNode.codeSummary === "string" &&
+                              selectedNode.codeSummary.startsWith("{") ? (
+                                <pre className="text-sm font-mono bg-black/5 dark:bg-white/5 p-4 rounded-lg">
+                                  {JSON.stringify(formatCodeSummary(selectedNode.codeSummary), null, 2)}
+                                </pre>
+                              ) : (
+                                <ReactMarkdown className="prose max-w-none" remarkPlugins={[remarkGfm]}>
+                                  {selectedNode.codeSummary}
+                                </ReactMarkdown>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-muted-foreground">No summary available</p>
+                          )}
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+            )}
           </div>
         )}
-
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                {selectedNode?.type === "File_Url" && "📄"}
-                {selectedNode?.type === "Dir_Url" && "📁"}
-                {selectedNode?.type === "Repo_Url" && "📦"}
-                {selectedNode?.label}
-              </DialogTitle>
-            </DialogHeader>
-
-            <Tabs defaultValue="details" className="mt-4">
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="details">Details</TabsTrigger>
-                {selectedNode?.type === "File_Url" && <TabsTrigger value="content">Content</TabsTrigger>}
-                <TabsTrigger value="codeSummary">Code Summary</TabsTrigger>
-                {selectedNode?.type === "File_Url" && <TabsTrigger value="contentVector">Content Vector</TabsTrigger>}
-                {selectedNode?.type === "File_Url" && <TabsTrigger value="summaryVector">Summary Vector</TabsTrigger>}
-              </TabsList>
-
-              <TabsContent value="details" className="mt-4">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold mb-1">Type</h3>
-                    <p className="text-muted-foreground">
-                      {selectedNode?.type === "File_Url" && "File"}
-                      {selectedNode?.type === "Dir_Url" && "Directory"}
-                      {selectedNode?.type === "Repo_Url" && "Repository"}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-1">Path</h3>
-                    <p>{selectedNode?.url}</p>
-                  </div>
-                  {selectedNode?.type === "File_Url" && (
-                    <div>
-                      <a
-                        href={selectedNode.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        Open in GitHub ↗
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              {selectedNode?.type === "File_Url" && (
-                <TabsContent value="content" className="mt-4">
-                  {isLoadingContent ? (
-                    <div className="flex items-center justify-center p-4">
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                    </div>
-                  ) : (
-                    <pre className="bg-muted p-4 rounded-md overflow-x-auto max-h-[500px] overflow-y-auto">
-                      <code>{fileContent}</code>
-                    </pre>
-                  )}
-                </TabsContent>
-              )}
-
-              <TabsContent value="codeSummary" className="mt-4">
-                <div className="p-4 bg-muted rounded-md overflow-y-auto max-h-[500px]">
-                  <ReactMarkdown className="prose max-w-none" remarkPlugins={[remarkGfm]}>
-                    {selectedNode?.codeSummary || "No summary available"}
-                  </ReactMarkdown>
-                </div>
-              </TabsContent>
-
-              {selectedNode?.type === "File_Url" && (
-                <>
-                  <TabsContent value="contentVector" className="mt-4">
-                    {selectedNode?.contentEmbedding ? (
-                      <pre className="bg-muted p-2 rounded overflow-x-auto">
-                        {JSON.stringify(selectedNode.contentEmbedding, null, 2)}
-                      </pre>
-                    ) : (
-                      <p className="text-muted-foreground">No content vector available.</p>
-                    )}
-                  </TabsContent>
-                  <TabsContent value="summaryVector" className="mt-4">
-                    {selectedNode?.summaryEmbedding ? (
-                      <pre className="bg-muted p-2 rounded overflow-x-auto">
-                        {JSON.stringify(selectedNode.summaryEmbedding, null, 2)}
-                      </pre>
-                    ) : (
-                      <p className="text-muted-foreground">No summary vector available.</p>
-                    )}
-                  </TabsContent>
-                </>
-              )}
-            </Tabs>
-          </DialogContent>
-        </Dialog>
       </div>
+
+      {/* Add custom scrollbar styles */}
+      <style jsx global>{`
+        .custom-scrollbar {
+          overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(155, 155, 155, 0.5);
+          border-radius: 20px;
+          border: transparent;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(155, 155, 155, 0.7);
+        }
+      `}</style>
     </div>
   )
 }
