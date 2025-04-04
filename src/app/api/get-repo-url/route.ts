@@ -7,15 +7,18 @@ const driver = neo4j.driver(
   neo4j.auth.basic(process.env.NEO4J_USER || "neo4j", process.env.NEO4J_PASSWORD || "password")
 );
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = driver.session();
+  const { searchParams } = new URL(req.url);
+  const userId = searchParams.get('userId');
 
   try {
-    // Fetch the Repo node
-    const result = await session.run(`
-      MATCH (r:Repo)
-      RETURN r.url AS repoUrl
-    `);
+    // Fetch the Repo node for specific user
+    const result = await session.run(
+      `MATCH (r:Repo {userId: $userId})
+       RETURN r.url AS repoUrl`,
+      { userId }
+    );
 
     const repoUrl = result.records.length > 0 ? result.records[0].get("repoUrl") : null;
 

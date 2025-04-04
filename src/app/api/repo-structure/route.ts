@@ -12,21 +12,25 @@ export async function POST(req: Request) {
   const session = driver.session();
 
   try {
-    const { repoUrl, repoStructure } = await req.json();
+    const { repoUrl, repoStructure, userId } = await req.json();
     console.log('Received Repository Structure:', repoStructure);
     console.log('Received Repo URL:', repoUrl);
 
     const firstUrl = repoUrl;
 
-    // Empty the graph before adding new data
-    await session.run(`MATCH (n) DETACH DELETE n`);
+    // Delete only the user's previous repository data
+    await session.run(
+      `MATCH (repo:Repo {userId: $userId})
+       DETACH DELETE repo`,
+      { userId }
+    );
 
-    // Create the main repository node
+    // Create the main repository node with user ID
     await session.run(
       `
-        MERGE (repo:Repo {url: $repoUrl, type: "Repo_Url", label: "Repo"})
+        MERGE (repo:Repo {url: $repoUrl, type: "Repo_Url", label: "Repo", userId: $userId})
       `,
-      { repoUrl: firstUrl }
+      { repoUrl: firstUrl, userId }
     );
 
     interface RepoStructureItem {
@@ -41,7 +45,7 @@ export async function POST(req: Request) {
     const addToGraph = async (item: RepoStructureItem) => {
       const pathParts = item.path.split("/");
       const itemName = pathParts[pathParts.length - 1];
-      const codeSummary = item.codeSummary || "No summary available"; // Default if missing
+      const codeSummary = item.codeSummary || "No summary available";
 
       if (pathParts.length === 1) {
         // Root-level items
@@ -49,21 +53,23 @@ export async function POST(req: Request) {
           const dirUrl = `${firstUrl}/${item.path}`;
           await session.run(
             `
-              MERGE (dir:Dir {url: $dirUrl, type: "Dir_Url", label: $itemName})
+              MERGE (repo:Repo {userId: $userId, url: $repoUrl})
+              MERGE (dir:Dir {url: $dirUrl, type: "Dir_Url", label: $itemName, userId: $userId})
               ON CREATE SET dir.codeSummary = $codeSummary
               MERGE (repo)-[:CONTAINS_DIR]->(dir)
             `,
-            { dirUrl, itemName, codeSummary }
+            { dirUrl, itemName, codeSummary, userId, repoUrl: firstUrl }
           );
         } else if (item.type === "file") {
           const fileUrl = item.download_url;
           await session.run(
             `
-              MERGE (file:File {url: $fileUrl, type: "File_Url", label: $itemName})
+              MERGE (repo:Repo {userId: $userId, url: $repoUrl})
+              MERGE (file:File {url: $fileUrl, type: "File_Url", label: $itemName, userId: $userId})
               ON CREATE SET file.codeSummary = $codeSummary
               MERGE (repo)-[:CONTAINS_FILE]->(file)
             `,
-            { fileUrl, itemName, codeSummary }
+            { fileUrl, itemName, codeSummary, userId, repoUrl: firstUrl }
           );
         }
       } else {
@@ -75,23 +81,23 @@ export async function POST(req: Request) {
           const dirUrl = `${firstUrl}/${item.path}`;
           await session.run(
             `
-              MERGE (dir:Dir {url: $dirUrl, type: "Dir_Url", label: $itemName})
+              MERGE (parent:Dir {url: $parentUrl, userId: $userId})
+              MERGE (dir:Dir {url: $dirUrl, type: "Dir_Url", label: $itemName, userId: $userId})
               ON CREATE SET dir.codeSummary = $codeSummary
-              MERGE (parent:Dir {url: $parentUrl})
               MERGE (parent)-[:CONTAINS_DIR]->(dir)
             `,
-            { dirUrl, parentUrl, itemName, codeSummary }
+            { dirUrl, parentUrl, itemName, codeSummary, userId }
           );
         } else if (item.type === "file") {
           const fileUrl = item.download_url;
           await session.run(
             `
-              MERGE (file:File {url: $fileUrl, type: "File_Url", label: $itemName})
+              MERGE (parent:Dir {url: $parentUrl, userId: $userId})
+              MERGE (file:File {url: $fileUrl, type: "File_Url", label: $itemName, userId: $userId})
               ON CREATE SET file.codeSummary = $codeSummary
-              MERGE (parent:Dir {url: $parentUrl})
               MERGE (parent)-[:CONTAINS_FILE]->(file)
             `,
-            { fileUrl, parentUrl, itemName, codeSummary }
+            { fileUrl, parentUrl, itemName, codeSummary, userId }
           );
         }
       }
@@ -142,79 +148,133 @@ interface Link {
   relationship: string;
 }
 
+interface Neo4jNode {
+  properties: {
+    url: string;
+    label: string;
+    type: string;
+    codeSummary?: string;
+    contentEmbedding?: number[] | null;
+    summaryEmbedding?: number[] | null;
+  };
+}
+
+interface Neo4jRelationship {
+  startUrl: string;
+  endUrl: string;
+  relationship: string;
+}
+
 // GET request to fetch the knowledge graph data
-export async function GET() {
+export async function GET(req: Request) {
   const session = driver.session();
+  const { searchParams } = new URL(req.url);
+  const userId = searchParams.get('userId');
+
+  if (!userId) {
+    return NextResponse.json(
+      { error: "User ID is required" },
+      { status: 400 }
+    );
+  }
 
   try {
-    // Fetch nodes and relationships from Neo4j
-    const result = await session.run(`
-      MATCH (n)-[r]->(m)
-      RETURN n, r, m
-    `);
+    console.log(`Fetching graph data for user ID: ${userId}`);
+    
+    // Modified query to fetch all nodes and relationships with more explicit relationship data
+    const result = await session.run(
+      `MATCH (n)
+       WHERE n.userId = $userId
+       WITH COLLECT(n) as nodes
+       OPTIONAL MATCH (start)
+       WHERE start.userId = $userId
+       OPTIONAL MATCH (start)-[r]->(end)
+       WHERE end.userId = $userId
+       RETURN nodes, COLLECT({startUrl: start.url, relationship: type(r), endUrl: end.url}) as relationships`,
+      { userId }
+    );
+    
+    console.log(`Neo4j query result: ${result.records.length} records found`);
 
-    // Format data for the frontend graph library
     const nodes: Node[] = [];
     const links: Link[] = [];
-    const nodeSet = new Set<string>();
+    const nodeMap = new Map<string, Node>();
 
-    result.records.forEach((record) => {
-      const startNode = record.get("n").properties;
-      const endNode = record.get("m").properties;
-      const relationship = record.get("r").type;
-
-      if (!nodeSet.has(startNode.url)) {
-        nodes.push({
-          id: startNode.url,
-          label: startNode.label,
-          type: startNode.type,
-          codeSummary: startNode.codeSummary || "No summary available", // Include codeSummary
-          contentEmbedding: startNode.contentEmbedding || null,
-          summaryEmbedding: startNode.summaryEmbedding || null,
+    if (result.records.length > 0) {
+      const record = result.records[0];
+      
+      // Process all nodes first
+      const allNodes = record.get('nodes') as Neo4jNode[];
+      console.log('Raw nodes from Neo4j:', allNodes);
+      
+      if (allNodes && Array.isArray(allNodes)) {
+        allNodes.forEach((node: Neo4jNode) => {
+          if (node && node.properties) {
+            const props = node.properties;
+            const nodeObj = {
+              id: props.url,
+              label: props.label || 'Unknown',
+              type: props.type || 'Unknown',
+              codeSummary: props.codeSummary || "No summary available",
+              contentEmbedding: props.contentEmbedding || null,
+              summaryEmbedding: props.summaryEmbedding || null,
+            };
+            nodes.push(nodeObj);
+            nodeMap.set(props.url, nodeObj);
+          }
         });
-        nodeSet.add(startNode.url);
       }
 
-      if (!nodeSet.has(endNode.url)) {
-        nodes.push({
-          id: endNode.url,
-          label: endNode.label,
-          type: endNode.type,
-          codeSummary: endNode.codeSummary || "No summary available",
-          contentEmbedding: endNode.contentEmbedding || null,
-          summaryEmbedding: endNode.summaryEmbedding || null,
+      // Process relationships
+      const relationships = record.get('relationships') as Neo4jRelationship[];
+      console.log('Raw relationships from Neo4j:', relationships);
+      
+      if (relationships && Array.isArray(relationships)) {
+        relationships.forEach((rel: Neo4jRelationship) => {
+          if (rel && rel.startUrl && rel.endUrl) {
+            const startNode = nodeMap.get(rel.startUrl);
+            const endNode = nodeMap.get(rel.endUrl);
+            
+            if (startNode && endNode) {
+              links.push({
+                source: startNode.id,  // Use the ID instead of the full node
+                target: endNode.id,    // Use the ID instead of the full node
+                relationship: rel.relationship
+              });
+            } else {
+              console.log('Missing node for relationship:', {
+                startUrl: rel.startUrl,
+                endUrl: rel.endUrl,
+                availableNodes: Array.from(nodeMap.keys())
+              });
+            }
+          }
         });
-        nodeSet.add(endNode.url);
       }
+    }
 
-      links.push({
-        source: startNode.url,
-        target: endNode.url,
-        relationship,
-      });
+    console.log('Final processed data:', {
+      nodeCount: nodes.length,
+      linkCount: links.length,
+      sampleNode: nodes[0],
+      sampleLink: links[0]
     });
-
-    // Assuming the repoUrl is stored in the nodes with type "Repo"
-    const repoNode = nodes.find(node => node.type === "Repo_Url");
-    const repoUrl = repoNode ? repoNode.id : null; // Get the repoUrl from the Repo node
-
-    return NextResponse.json({ nodes, links, repoUrl }, { status: 200 });
+    
+    return NextResponse.json({ nodes, links }, { status: 200 });
   } catch (error) {
+    console.error("Error in repo-structure GET:", error);
     if (error instanceof Error) {
-      console.error("Error fetching graph data:", error.message);
       return NextResponse.json(
         { error: "Internal Server Error", details: error.message },
         { status: 500 }
       );
     } else {
-      console.error("Unexpected error fetching graph data:", error);
       return NextResponse.json(
         { error: "Internal Server Error", details: "An unexpected error occurred." },
         { status: 500 }
       );
     }
-  }
-   finally {
+  } finally {
     await session.close();
   }
 }

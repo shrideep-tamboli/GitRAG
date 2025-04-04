@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Home } from "lucide-react"
+import { useAuth } from '@/lib/AuthContext'
 
 export default function ConnectRepo() {
+  const { user } = useAuth()
   const [repoUrl, setRepoUrl] = useState("")
   const [inputRepoUrl, setInputRepoUrl] = useState("")
   const [loading, setLoading] = useState(false)
@@ -34,7 +36,7 @@ export default function ConnectRepo() {
   useEffect(() => {
     const fetchConnectedRepo = async () => {
       try {
-        const response = await fetch("/api/get-repo-url")
+        const response = await fetch(`/api/get-repo-url?userId=${user?.id}`)
         if (!response.ok) {
           throw new Error("Failed to fetch connected repository")
         }
@@ -54,8 +56,10 @@ export default function ConnectRepo() {
       }
     }
 
-    fetchConnectedRepo()
-  }, [])
+    if (user) {
+      fetchConnectedRepo()
+    }
+  }, [user])
 
   const handleConnect = async () => {
     setLoading(true)
@@ -69,7 +73,10 @@ export default function ConnectRepo() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url: inputRepoUrl }),
+        body: JSON.stringify({ 
+          url: inputRepoUrl,
+          userId: user?.id 
+        }),
       })
 
       const data = await response.json()
@@ -100,7 +107,7 @@ export default function ConnectRepo() {
         setRepoUrl(inputRepoUrl)
         setInputRepoUrl("")
 
-        // Create/update the knowledge graph by sending the repo structure
+        // Create/update the knowledge graph
         await fetch("/api/repo-structure", {
           method: "POST",
           headers: {
@@ -109,6 +116,7 @@ export default function ConnectRepo() {
           body: JSON.stringify({
             repoUrl: inputRepoUrl,
             repoStructure: data.contents,
+            userId: user?.id
           }),
         })
 
@@ -116,7 +124,13 @@ export default function ConnectRepo() {
         setVectorizing(true)
         setVectorizeMessage("")
         try {
-          const vectorizeRes = await fetch("/api/vectorize", { method: "POST" })
+          const vectorizeRes = await fetch("/api/vectorize", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ userId: user?.id }),
+          })
           const vectorizeData = await vectorizeRes.json()
           setVectorizeMessage(vectorizeData.message || "Vectorization complete!")
         } catch (vectorizeError: unknown) {

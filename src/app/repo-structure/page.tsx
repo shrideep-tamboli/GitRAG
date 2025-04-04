@@ -9,6 +9,7 @@ import axios from "axios"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { useAuth } from '@/lib/AuthContext'
 
 // Dynamically import the force-graph component
 const ForceGraph3D = dynamic(() => import("react-force-graph").then((mod) => mod.ForceGraph3D), { ssr: false })
@@ -41,6 +42,7 @@ interface ChatMessage {
 
 export default function RepoStructure() {
   const router = useRouter()
+  const { user } = useAuth()
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -54,15 +56,36 @@ export default function RepoStructure() {
   const [width, setWidth] = useState(0)
 
   const fetchGraphData = useCallback(async () => {
+    if (!user?.id) {
+      console.error("No user ID available")
+      setError("Please sign in to view the repository structure")
+      return
+    }
+
     setLoading(true)
     setError("")
 
     try {
-      const response = await fetch("/api/repo-structure")
+      console.log(`Fetching graph data for user ID: ${user.id}`)
+      const response = await fetch(`/api/repo-structure?userId=${user.id}`)
       if (!response.ok) {
         throw new Error(`Failed to fetch graph data: ${response.statusText}`)
       }
       const data = await response.json()
+      console.log("Received graph data:", data)
+      
+      if (!data.nodes || data.nodes.length === 0) {
+        setError("No repository data found. Please connect a repository first.")
+        return
+      }
+      
+      console.log("Graph data details:", {
+        nodes: data.nodes.length,
+        links: data.links ? data.links.length : 0,
+        sampleNode: data.nodes[0],
+        sampleLink: data.links && data.links.length > 0 ? data.links[0] : null
+      })
+      
       setGraphData(data)
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -75,11 +98,13 @@ export default function RepoStructure() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
-    fetchGraphData()
-  }, [fetchGraphData])
+    if (user?.id) {
+      fetchGraphData()
+    }
+  }, [fetchGraphData, user?.id])
 
   useEffect(() => {
     messagesStartRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -277,14 +302,22 @@ export default function RepoStructure() {
                             : "#003366"
                   }}
                   nodeRelSize={6}
-                  linkWidth={2}
+                  linkWidth={1}
+                  linkColor={() => "#2a4858"}
+                  linkOpacity={0.8}
                   linkDirectionalParticles={4}
-                  linkDirectionalParticleWidth={2}
-                  linkDirectionalParticleSpeed={0.005}
+                  linkDirectionalParticleWidth={3}
+                  linkDirectionalParticleSpeed={0.006}
                   backgroundColor="#f8f9fa"
                   onNodeClick={(node) => handleNodeClick(node as Node)}
-                  linkColor={() => "#94a3b8"}
                   width={isSideCanvasOpen ? width / 2 : width}
+                  d3AlphaDecay={0.02}
+                  d3VelocityDecay={0.3}
+                  warmupTicks={100}
+                  cooldownTicks={50}
+                  nodeId="id"
+                  linkSource="source"
+                  linkTarget="target"
                 />
                 <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
                   <h3 className="font-semibold">Node Color Legend</h3>

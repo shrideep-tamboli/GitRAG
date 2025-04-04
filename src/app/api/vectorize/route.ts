@@ -26,11 +26,16 @@ async function generateEmbeddings(text: string): Promise<number[]> {
     }
   }
 
-export async function POST() {
+export async function POST(req: Request) {
   const session = driver.session();
+  const { userId } = await req.json();  // Add userId parameter
+
   try {
-    // Get all nodes from the graph
-    const result = await session.run("MATCH (n) RETURN n");
+    // Get all nodes from the graph for the specific user
+    const result = await session.run(
+      "MATCH (n {userId: $userId}) RETURN n",
+      { userId }
+    );
     for (const record of result.records) {
       const node = record.get("n");
       // Process only file-type nodes with a valid URL
