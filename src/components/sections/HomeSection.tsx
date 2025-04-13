@@ -1,12 +1,12 @@
 "use client"
 
-import { Network, Database, GitBranch, Brain, LogOut } from "lucide-react"
+import { Network, Database, GitBranch, Brain } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/AuthContext"
 import { Card } from "@/components/ui/card"
 
 export default function HomeSection() {
-  const { user, loading, signOut } = useAuth()
+  const { user, loading } = useAuth()
 
   if (loading) {
     return (
