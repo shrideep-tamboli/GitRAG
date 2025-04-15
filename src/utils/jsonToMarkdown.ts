@@ -4,9 +4,9 @@
  * @param level The current heading level (h1, h2, h3, etc.)
  * @returns A string containing the markdown representation
  */
-export function convertJsonToMarkdown(json: any, level = 1): string {
+export function convertJsonToMarkdown(json: Record<string, unknown>, level = 1): string {
   if (!json || typeof json !== 'object') {
-    return json?.toString() || '';
+    return String(json || '');
   }
 
   let markdown = '';
@@ -25,7 +25,7 @@ export function convertJsonToMarkdown(json: any, level = 1): string {
     
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       // Recursively handle nested objects with increased heading level
-      markdown += convertJsonToMarkdown(value, level + 1);
+      markdown += convertJsonToMarkdown(value as Record<string, unknown>, level + 1);
     } else if (Array.isArray(value)) {
       // Handle arrays as bullet points
       if (value.length === 0) {
@@ -33,7 +33,7 @@ export function convertJsonToMarkdown(json: any, level = 1): string {
       } else {
         value.forEach((item) => {
           if (item && typeof item === 'object') {
-            markdown += convertJsonToMarkdown(item, level + 1);
+            markdown += convertJsonToMarkdown(item as Record<string, unknown>, level + 1);
           } else {
             markdown += `- ${item}\n`;
           }
@@ -65,7 +65,7 @@ export function formatCodeSummary(summary: string): string {
     // Try to parse as JSON if it's in JSON format
     const jsonObj = JSON.parse(summary);
     return convertJsonToMarkdown(jsonObj);
-  } catch (error) {
+  } catch {
     // If not valid JSON, return as is
     return summary;
   }

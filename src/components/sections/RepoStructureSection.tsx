@@ -455,14 +455,14 @@ export default function RepoStructureSection() {
                                     // Handle plain JSON strings
                                     try {
                                       // Try to parse it as JSON to validate
-                                      const parsedJson = JSON.parse(summary);
+                                      JSON.parse(summary);
                                       // If it's valid JSON, process it
                                       return formatCodeSummary(summary);
-                                    } catch (e) {
+                                    } catch {
                                       // If not valid JSON, try to clean up further
                                       if (summary.startsWith("{") && summary.endsWith("}")) {
                                         // It looks like JSON but couldn't be parsed, use as is
-                                        return formatCodeSummary(summary);
+                                         return formatCodeSummary(summary);
                                       } else {
                                         // Not JSON format, return as plain text
                                         return summary;
