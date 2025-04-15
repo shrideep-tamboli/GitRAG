@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Send, X } from "lucide-react"
 import axios from "axios"
-import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { useAuth } from '@/lib/AuthContext'
@@ -50,7 +49,6 @@ interface ChatMessage {
 }
 
 export default function RepoStructureSection() {
-  const router = useRouter()
   const { user } = useAuth()
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] })
   const [loading, setLoading] = useState(false)
@@ -61,6 +59,7 @@ export default function RepoStructureSection() {
   const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [chatInput, setChatInput] = useState("")
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isTyping, setIsTyping] = useState(false)
   const messagesStartRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
 
@@ -188,22 +187,22 @@ export default function RepoStructureSection() {
 
     const userMessage = chatInput
     setMessages((prev) => [{ sender: "user", text: userMessage }, ...prev])
-
-    const payload = {
-      message: userMessage,
-      summaries: summaries,
-    }
-
     setChatInput("")
+    setIsTyping(true)
 
     try {
-      const response = await axios.post("/api/chat", payload)
+      const response = await axios.post("/api/chat", {
+        message: userMessage,
+        summaries: summaries,
+      })
       console.log("Chat response:", response.data)
       const botReply = response.data.response
       setMessages((prev) => [{ sender: "bot", text: botReply }, ...prev])
     } catch (err) {
       console.error("Error sending chat message:", err)
       setMessages((prev) => [{ sender: "bot", text: "Error: Failed to get response." }, ...prev])
+    } finally {
+      setIsTyping(false)
     }
   }
 
@@ -224,24 +223,30 @@ export default function RepoStructureSection() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-[#f9f9f7]">
       <div className="flex-1 container mx-auto p-8">
-        <button
-          onClick={() => router.push("/connect-repo")}
-          className="mb-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-        >
-          ← Back to Connect Repo
-        </button>
 
-        <div className="border rounded mb-8 flex flex-col" style={{ maxHeight: "640px" }}>
+        <div className="border-2 border-gray-800/20 rounded-lg mb-8 flex flex-col bg-[#fdf6e3]" style={{ maxHeight: "640px" }}>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col-reverse">
+            {isTyping && (
+              <div className="flex justify-start mb-2">
+                <div className="max-w-[70%] p-3 rounded-lg bg-white text-gray-800">
+                  <div className="flex items-center space-x-2">
+                    <span>Typing</span>
+                    <span className="animate-pulse">.</span>
+                    <span className="animate-pulse animation-delay-200">.</span>
+                    <span className="animate-pulse animation-delay-400">.</span>
+                  </div>
+                </div>
+              </div>
+            )}
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} mb-2`}>
                 <div
                   className={`max-w-[70%] p-3 rounded-lg ${
                     msg.sender === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground"
+                      ? "bg-[#f8b878] text-gray-800"
+                      : "bg-white text-gray-800"
                   }`}
                 >
                   {msg.text}
@@ -250,7 +255,7 @@ export default function RepoStructureSection() {
             ))}
             <div ref={messagesStartRef} />
           </div>
-          <div className="p-2 border-t flex items-center space-x-2">
+          <div className="p-2 border-t border-gray-800/20 flex items-center space-x-2">
             <input
               type="text"
               value={chatInput}
@@ -261,11 +266,11 @@ export default function RepoStructureSection() {
                 }
               }}
               placeholder="Enter your message..."
-              className="flex-1 p-2 border rounded-md outline-none focus:ring-2 focus:ring-primary text-black"
+              className="flex-1 p-2 border-2 border-gray-800/20 rounded-md outline-none focus:ring-2 focus:ring-[#f8b878] text-gray-800 bg-white"
             />
             <button
               onClick={handleSend}
-              className="p-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              className="p-2 bg-[#f8b878] text-gray-800 rounded-md hover:bg-[#f6a55f] transition-colors"
               aria-label="Send message"
             >
               <Send className="h-5 w-5" />
@@ -273,25 +278,25 @@ export default function RepoStructureSection() {
           </div>
         </div>
 
-        <Card className="p-6 mb-8">
-          <h1 className="text-3xl font-bold mb-2">Repository Knowledge Graph</h1>
-          <p className="text-muted-foreground">
+        <Card className="p-6 mb-8 border-2 border-gray-800/20 rounded-xl bg-[#fdf6e3] shadow-lg">
+          <h1 className="text-3xl font-bold mb-2 text-gray-800">Repository Knowledge Graph</h1>
+          <p className="text-gray-700">
             Explore your repository structure in 3D. Click on nodes to view details.
           </p>
         </Card>
 
         {loading && (
           <div className="flex items-center justify-center h-[600px]">
-            <Loader2 className="h-8 w-8 animate-spin" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#f8b878]" />
           </div>
         )}
 
-        {error && <div className="p-4 bg-destructive/10 text-destructive rounded-md">{error}</div>}
+        {error && <div className="p-4 bg-red-100 text-red-700 rounded-md border-2 border-red-300">{error}</div>}
 
         {!loading && !error && (
           <div className="flex h-[800px]">
             <div
-              className={`bg-card rounded-lg shadow-xl overflow-hidden relative transition-all duration-300 ease-in-out ${
+              className={`bg-[#fdf6e3] rounded-lg shadow-xl overflow-hidden relative transition-all duration-300 ease-in-out border-2 border-gray-800/20 ${
                 isSideCanvasOpen ? "w-1/2" : "w-full"
               }`}
               style={{
@@ -307,13 +312,13 @@ export default function RepoStructureSection() {
                   nodeColor={(node) => {
                     const typedNode = node as Node
                     return selectedNode?.id === typedNode.id
-                      ? "#ff0000"
+                      ? "#f98b85"
                       : typedNode.type === "Repo_Url"
                         ? "#003366"
                         : typedNode.type === "Dir_Url"
                           ? "#4CAF50"
                           : typedNode.type === "File_Url"
-                            ? "#FF9800"
+                            ? "#f8b878"
                             : "#003366"
                   }}
                   nodeRelSize={6}
@@ -323,7 +328,7 @@ export default function RepoStructureSection() {
                   linkDirectionalParticles={4}
                   linkDirectionalParticleWidth={3}
                   linkDirectionalParticleSpeed={0.006}
-                  backgroundColor="#f8f9fa"
+                  backgroundColor="#fdf6e3"
                   onNodeClick={(node) => handleNodeClick(node as Node)}
                   width={isSideCanvasOpen ? width / 2 : width}
                   d3AlphaDecay={0.02}
@@ -336,11 +341,11 @@ export default function RepoStructureSection() {
                   enableNodeDrag={true}
                   linkLabel={link => link.relationship}
                 />
-                <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
+                <div className="absolute bottom-4 left-4 bg-[#fdf6e3] text-gray-800 rounded-lg shadow-lg p-4 border-2 border-gray-800/20">
                   <h3 className="font-semibold">Node Color Legend</h3>
                   <div className="flex flex-col mt-2">
                     <div className="flex items-center">
-                      <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+                      <div className="w-4 h-4 bg-[#f98b85] rounded-full mr-2"></div>
                       <span>Selected Node</span>
                     </div>
                     <div className="flex items-center">
@@ -352,7 +357,7 @@ export default function RepoStructureSection() {
                       <span>Folder</span>
                     </div>
                     <div className="flex items-center">
-                      <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
+                      <div className="w-4 h-4 bg-[#f8b878] rounded-full mr-2"></div>
                       <span>File</span>
                     </div>
                   </div>
@@ -362,90 +367,65 @@ export default function RepoStructureSection() {
 
             {/* Side Canvas */}
             {isSideCanvasOpen && selectedNode && (
-              <div className="w-1/2 bg-card rounded-lg shadow-xl ml-4 overflow-hidden flex flex-col">
-                <div className="p-4 border-b flex justify-between items-center">
-                  <h2 className="text-xl font-bold flex items-center gap-2">
+              <div className="w-1/2 bg-[#fdf6e3] rounded-lg shadow-xl ml-4 overflow-hidden flex flex-col border-2 border-gray-800/20">
+                <div className="p-4 border-b border-gray-800/20 flex justify-between items-center">
+                  <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
                     {selectedNode?.type === "File_Url" && "📄"}
                     {selectedNode?.type === "Dir_Url" && "📁"}
                     {selectedNode?.type === "Repo_Url" && "📦"}
                     {selectedNode?.label}
                   </h2>
-                  <button onClick={closeSideCanvas} className="p-1 hover:bg-muted rounded-full" aria-label="Close">
-                    <X className="h-5 w-5" />
+                  <button onClick={closeSideCanvas} className="p-1 hover:bg-white rounded-full" aria-label="Close">
+                    <X className="h-5 w-5 text-gray-800" />
                   </button>
                 </div>
 
                 <div className="flex-1 p-4">
-                  <Tabs defaultValue="details" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="details">Details</TabsTrigger>
-                      {selectedNode?.type === "File_Url" && <TabsTrigger value="content">Content</TabsTrigger>}
-                      <TabsTrigger value="codeSummary">Code Summary</TabsTrigger>
+                  <Tabs defaultValue="content" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="content" className="text-gray-800">Content</TabsTrigger>
+                      <TabsTrigger value="codeSummary" className="text-gray-800">Code Summary</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="details" className="mt-4">
-                      <div className="custom-scrollbar h-[600px] p-4 space-y-4">
-                        <div>
-                          <h3 className="font-semibold mb-1">Type</h3>
-                          <p className="text-muted-foreground">
-                            {selectedNode?.type === "File_Url" && "File"}
-                            {selectedNode?.type === "Dir_Url" && "Directory"}
-                            {selectedNode?.type === "Repo_Url" && "Repository"}
-                          </p>
+                    <TabsContent value="content" className="mt-4">
+                      {isLoadingContent ? (
+                        <div className="flex items-center justify-center p-4">
+                          <Loader2 className="h-6 w-6 animate-spin text-[#f8b878]" />
                         </div>
-                        <div>
-                          <h3 className="font-semibold mb-1">Path</h3>
-                          <p>{selectedNode?.url}</p>
+                      ) : (
+                        <div className="custom-scrollbar h-[600px]">
+                          <pre className="bg-white p-4 rounded-md border-2 border-gray-800/20">
+                            <code className="text-gray-800">{fileContent}</code>
+                          </pre>
                         </div>
-                        {selectedNode?.type === "File_Url" && (
-                          <div>
-                            <a
-                              href={selectedNode.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline"
-                            >
-                              Open in GitHub ↗
-                            </a>
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </TabsContent>
-
-                    {selectedNode?.type === "File_Url" && (
-                      <TabsContent value="content" className="mt-4">
-                        {isLoadingContent ? (
-                          <div className="flex items-center justify-center p-4">
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                          </div>
-                        ) : (
-                          <div className="custom-scrollbar h-[600px]">
-                            <pre className="bg-muted p-4 rounded-md">
-                              <code>{fileContent}</code>
-                            </pre>
-                          </div>
-                        )}
-                      </TabsContent>
-                    )}
 
                     <TabsContent value="codeSummary" className="mt-4">
                       <div className="custom-scrollbar h-[600px]">
-                        <div className="p-6 bg-muted rounded-md">
+                        <div className="p-6 bg-white rounded-md border-2 border-gray-800/20">
                           {selectedNode?.codeSummary ? (
-                            <div className="prose prose-sm max-w-none dark:prose-invert">
+                            <div className="prose prose-sm max-w-none">
                               {typeof selectedNode.codeSummary === "string" &&
                               selectedNode.codeSummary.startsWith("{") ? (
-                                <pre className="text-sm font-mono bg-black/5 dark:bg-white/5 p-4 rounded-lg">
+                                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} className="text-sm font-mono bg-white p-4 rounded-lg text-gray-800">
                                   {JSON.stringify(formatCodeSummary(selectedNode.codeSummary), null, 2)}
                                 </pre>
                               ) : (
-                                <ReactMarkdown className="prose max-w-none" remarkPlugins={[remarkGfm]}>
+                                <ReactMarkdown 
+                                  className="prose max-w-none text-gray-800" 
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    p: ({children, ...props}) => <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} {...props}>{children}</p>,
+                                    pre: ({children, ...props}) => <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} {...props}>{children}</pre>
+                                  }}
+                                >
                                   {selectedNode.codeSummary}
                                 </ReactMarkdown>
                               )}
                             </div>
                           ) : (
-                            <p className="text-muted-foreground">No summary available</p>
+                            <p className="text-gray-700">No summary available</p>
                           )}
                         </div>
                       </div>
@@ -482,6 +462,13 @@ export default function RepoStructureSection() {
         
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background-color: rgba(155, 155, 155, 0.7);
+        }
+
+        .animation-delay-200 {
+          animation-delay: 200ms;
+        }
+        .animation-delay-400 {
+          animation-delay: 400ms;
         }
       `}</style>
     </div>
