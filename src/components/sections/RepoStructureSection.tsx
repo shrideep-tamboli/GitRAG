@@ -9,6 +9,7 @@ import axios from "axios"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { useAuth } from '@/lib/AuthContext'
+import { formatCodeSummary } from "../../utils/jsonToMarkdown"
 
 // Dynamically import the force-graph component with A-Frame
 const ForceGraph3D = dynamic(() => {
@@ -151,19 +152,40 @@ export default function RepoStructureSection() {
       const fetchFileContent = async (url: string) => {
         setIsLoadingContent(true)
         try {
+          console.log("Fetching content from URL:", url)
+          
+          let response;
           if (url.includes("raw.githubusercontent.com")) {
-            const response = await axios.get(url)
-            setFileContent(response.data)
+            response = await axios.get(url)
+          } else if (url.includes("api.github.com/repos")) {
+            // For GitHub API URLs, transform to raw content URL
+            // Example: https://api.github.com/repos/owner/repo/contents/path/to/file -> https://raw.githubusercontent.com/owner/repo/main/path/to/file
+            const parts = url.split('/repos/')[1].split('/contents/')
+            const repoPath = parts[0] // owner/repo
+            const filePath = parts.length > 1 ? parts[1] : ''
+            const rawUrl = `https://raw.githubusercontent.com/${repoPath}/main/${filePath}`
+            
+            console.log("Transformed URL:", rawUrl)
+            response = await axios.get(rawUrl)
           } else {
-            const rawUrl = url.replace("api.github.com/repos", "raw.githubusercontent.com").replace("/contents/", "/")
-            const response = await axios.get(rawUrl)
-            setFileContent(response.data)
+            // Try direct fetch for other URLs
+            response = await axios.get(url)
           }
+          
+          setFileContent(response.data)
+          console.log("Content fetched successfully")
         } catch (err) {
           console.error("Error fetching file content:", err)
-          setFileContent(
-            "Failed to load file content. This might be due to file size limitations or access restrictions.",
-          )
+          // More detailed error message
+          if (axios.isAxiosError(err)) {
+            setFileContent(
+              `Failed to load file content: ${err.message}. Status: ${err.response?.status || 'unknown'}. This might be due to file size limitations, access restrictions, or the file being binary content.`
+            )
+          } else {
+            setFileContent(
+              "Failed to load file content. This might be due to file size limitations or access restrictions."
+            )
+          }
         } finally {
           setIsLoadingContent(false)
         }
@@ -209,17 +231,6 @@ export default function RepoStructureSection() {
   const closeSideCanvas = () => {
     setIsSideCanvasOpen(false)
     setSelectedNode(null)
-  }
-
-  // Function to format JSON for better readability
-  const formatCodeSummary = (summary: string) => {
-    try {
-      // Try to parse as JSON if it's in JSON format
-      const jsonObj = JSON.parse(summary)
-      return jsonObj
-    } catch {
-      return summary
-    }
   }
 
   return (
@@ -373,7 +384,7 @@ export default function RepoStructureSection() {
                     {selectedNode?.type === "File_Url" && "📄"}
                     {selectedNode?.type === "Dir_Url" && "📁"}
                     {selectedNode?.type === "Repo_Url" && "📦"}
-                    {selectedNode?.label}
+                    {selectedNode?.url ? selectedNode.url.split('/').slice(5).join('/') : selectedNode?.label}
                   </h2>
                   <button onClick={closeSideCanvas} className="p-1 hover:bg-white rounded-full" aria-label="Close">
                     <X className="h-5 w-5 text-gray-800" />
@@ -381,11 +392,94 @@ export default function RepoStructureSection() {
                 </div>
 
                 <div className="flex-1 p-4">
-                  <Tabs defaultValue="content" className="w-full">
+                  <Tabs defaultValue="codeSummary" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="content" className="text-gray-800">Content</TabsTrigger>
                       <TabsTrigger value="codeSummary" className="text-gray-800">Code Summary</TabsTrigger>
+                      <TabsTrigger value="content" className="text-gray-800">Content</TabsTrigger>
                     </TabsList>
+
+                    <TabsContent value="codeSummary" className="mt-4">
+                      <div className="custom-scrollbar h-[600px]">
+                        <div className="p-6 bg-white rounded-md border-2 border-gray-800/20">
+                          {selectedNode?.codeSummary ? (
+                            <div className="prose prose-sm max-w-none">
+                              {typeof selectedNode.codeSummary === "string" ? (
+                                <ReactMarkdown 
+                                  className="prose max-w-none text-gray-800" 
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    h1: ({children, ...props}) => (
+                                      <h1 className="text-xl font-bold mt-4 mb-2 text-gray-800" {...props}>{children}</h1>
+                                    ),
+                                    h2: ({children, ...props}) => (
+                                      <h2 className="text-lg font-semibold mt-3 mb-2 text-gray-800" {...props}>{children}</h2>
+                                    ),
+                                    h3: ({children, ...props}) => (
+                                      <h3 className="text-base font-medium mt-2 mb-1 text-gray-800" {...props}>{children}</h3>
+                                    ),
+                                    p: ({children, ...props}) => (
+                                      <p className="text-gray-600 mb-2" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} {...props}>{children}</p>
+                                    ),
+                                    ul: ({children, ...props}) => (
+                                      <ul className="list-disc pl-4 mb-2 text-gray-600" {...props}>{children}</ul>
+                                    ),
+                                    li: ({children, ...props}) => (
+                                      <li className="mb-1" {...props}>{children}</li>
+                                    )
+                                  }}
+                                >
+                                  {(() => {
+                                    let summary = selectedNode.codeSummary;
+                                    
+                                    // Clean up the summary string - handle various formats
+                                    // Handle extra quotes and whitespace
+                                    summary = summary.trim();
+                                    
+                                    // Remove extra quotes at the beginning and end if present
+                                    if (summary.startsWith('""') && summary.endsWith('""')) {
+                                      summary = summary.substring(2, summary.length - 2).trim();
+                                    } else if (summary.startsWith('"') && summary.endsWith('"')) {
+                                      summary = summary.substring(1, summary.length - 1).trim();
+                                    }
+                                    
+                                    // Handle code blocks with backticks
+                                    if (summary.startsWith("```json") && summary.includes("```")) {
+                                      // Extract content between ```json and the last ```
+                                      const startIndex = summary.indexOf("```json") + 7;
+                                      const endIndex = summary.lastIndexOf("```");
+                                      if (endIndex > startIndex) {
+                                        summary = summary.substring(startIndex, endIndex).trim();
+                                      }
+                                    }
+                                    
+                                    // Handle plain JSON strings
+                                    try {
+                                      // Try to parse it as JSON to validate
+                                      const parsedJson = JSON.parse(summary);
+                                      // If it's valid JSON, process it
+                                      return formatCodeSummary(summary);
+                                    } catch (e) {
+                                      // If not valid JSON, try to clean up further
+                                      if (summary.startsWith("{") && summary.endsWith("}")) {
+                                        // It looks like JSON but couldn't be parsed, use as is
+                                        return formatCodeSummary(summary);
+                                      } else {
+                                        // Not JSON format, return as plain text
+                                        return summary;
+                                      }
+                                    }
+                                  })()}
+                                </ReactMarkdown>
+                              ) : (
+                                <p className="text-gray-700">Summary format not recognized</p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-gray-700">No summary available</p>
+                          )}
+                        </div>
+                      </div>
+                    </TabsContent>
 
                     <TabsContent value="content" className="mt-4">
                       {isLoadingContent ? (
@@ -394,41 +488,11 @@ export default function RepoStructureSection() {
                         </div>
                       ) : (
                         <div className="custom-scrollbar h-[600px]">
-                          <pre className="bg-white p-4 rounded-md border-2 border-gray-800/20">
+                          <pre className="bg-white p-4 rounded-md border-2 border-gray-800/20" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                             <code className="text-gray-800">{fileContent}</code>
                           </pre>
                         </div>
                       )}
-                    </TabsContent>
-
-                    <TabsContent value="codeSummary" className="mt-4">
-                      <div className="custom-scrollbar h-[600px]">
-                        <div className="p-6 bg-white rounded-md border-2 border-gray-800/20">
-                          {selectedNode?.codeSummary ? (
-                            <div className="prose prose-sm max-w-none">
-                              {typeof selectedNode.codeSummary === "string" &&
-                              selectedNode.codeSummary.startsWith("{") ? (
-                                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} className="text-sm font-mono bg-white p-4 rounded-lg text-gray-800">
-                                  {JSON.stringify(formatCodeSummary(selectedNode.codeSummary), null, 2)}
-                                </pre>
-                              ) : (
-                                <ReactMarkdown 
-                                  className="prose max-w-none text-gray-800" 
-                                  remarkPlugins={[remarkGfm]}
-                                  components={{
-                                    p: ({children, ...props}) => <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} {...props}>{children}</p>,
-                                    pre: ({children, ...props}) => <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} {...props}>{children}</pre>
-                                  }}
-                                >
-                                  {selectedNode.codeSummary}
-                                </ReactMarkdown>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-gray-700">No summary available</p>
-                          )}
-                        </div>
-                      </div>
                     </TabsContent>
                   </Tabs>
                 </div>
