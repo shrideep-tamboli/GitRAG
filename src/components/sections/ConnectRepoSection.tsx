@@ -19,7 +19,11 @@ interface RepoItem {
   } | null
 }
 
-export default function ConnectRepoSection() {
+interface ConnectRepoSectionProps {
+  onRepoConnected: () => void
+}
+
+export default function ConnectRepoSection({ onRepoConnected }: ConnectRepoSectionProps) {
   const { user } = useAuth()
   const [repoUrl, setRepoUrl] = useState("")
   const [inputRepoUrl, setInputRepoUrl] = useState("")
@@ -106,6 +110,7 @@ export default function ConnectRepoSection() {
           })
           const vectorizeData = await vectorizeRes.json()
           setVectorizeMessage(vectorizeData.message || "Vectorization complete!")
+          onRepoConnected()
         } catch (vectorizeError: unknown) {
           console.error("Error vectorizing graph:", vectorizeError)
           setVectorizeMessage("Error vectorizing graph")
@@ -217,6 +222,7 @@ export default function ConnectRepoSection() {
 
                 <button
                   onClick={() => {
+                    onRepoConnected()
                     const repoStructureSection = document.getElementById("repo-structure")
                     repoStructureSection?.scrollIntoView({ behavior: "smooth" })
                   }}

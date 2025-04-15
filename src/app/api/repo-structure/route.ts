@@ -18,10 +18,11 @@ export async function POST(req: Request) {
 
     const firstUrl = repoUrl;
 
-    // Delete only the user's previous repository data
+    // Delete all nodes and relationships for this user
     await session.run(
-      `MATCH (repo:Repo {userId: $userId})
-       DETACH DELETE repo`,
+      `MATCH (n)
+       WHERE n.userId = $userId
+       DETACH DELETE n`,
       { userId }
     );
 
