@@ -178,6 +178,13 @@ export async function GET(req: Request) {
     );
   }
 
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    return NextResponse.json(
+      { error: "Invalid user ID format" },
+      { status: 422 }
+    );
+  }
+
   try {
     console.log(`Fetching graph data for user ID: ${userId}`);
     
@@ -195,6 +202,13 @@ export async function GET(req: Request) {
     );
     
     console.log(`Neo4j query result: ${result.records.length} records found`);
+
+    if (result.records.length === 0) {
+      return NextResponse.json(
+        { error: "No graph data found for this user" },
+        { status: 404 }
+      );
+    }
 
     const nodes: Node[] = [];
     const links: Link[] = [];

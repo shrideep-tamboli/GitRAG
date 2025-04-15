@@ -98,7 +98,7 @@ export async function POST(request: Request) {
           content: body.message,
         },
       ],
-      model: "deepseek-r1-distill-qwen-32b",
+      model: "llama-3.3-70b-versatile",
     });
 
     console.log("Groq Response:", response.choices[0].message.content);

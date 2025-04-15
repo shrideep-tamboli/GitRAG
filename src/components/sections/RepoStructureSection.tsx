@@ -11,8 +11,17 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { useAuth } from '@/lib/AuthContext'
 
-// Dynamically import the force-graph component
-const ForceGraph3D = dynamic(() => import("react-force-graph").then((mod) => mod.ForceGraph3D), { ssr: false })
+// Dynamically import the force-graph component with A-Frame
+const ForceGraph3D = dynamic(() => {
+  // Import A-Frame first
+  return import('aframe').then(() => {
+    // Then import the force graph
+    return import('react-force-graph').then(mod => mod.ForceGraph3D);
+  });
+}, {
+  ssr: false,
+  loading: () => <div>Loading 3D visualization...</div>
+});
 
 interface Node {
   id: string
@@ -68,10 +77,17 @@ export default function RepoStructureSection() {
     try {
       console.log(`Fetching graph data for user ID: ${user.id}`)
       const response = await fetch(`/api/repo-structure?userId=${user.id}`)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch graph data: ${response.statusText}`)
-      }
       const data = await response.json()
+      
+      if (!response.ok) {
+        console.error("Graph data fetch failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          data: data
+        })
+        throw new Error(`Failed to fetch graph data: ${response.statusText}. ${data.error || ''}`)
+      }
+      
       console.log("Received graph data:", data)
       
       if (!data.nodes || data.nodes.length === 0) {
@@ -274,7 +290,6 @@ export default function RepoStructureSection() {
 
         {!loading && !error && (
           <div className="flex h-[800px]">
-            {/* Graph container - shrinks to 50% width when side canvas is open */}
             <div
               className={`bg-card rounded-lg shadow-xl overflow-hidden relative transition-all duration-300 ease-in-out ${
                 isSideCanvasOpen ? "w-1/2" : "w-full"
@@ -318,6 +333,8 @@ export default function RepoStructureSection() {
                   nodeId="id"
                   linkSource="source"
                   linkTarget="target"
+                  enableNodeDrag={true}
+                  linkLabel={link => link.relationship}
                 />
                 <div className="absolute top-4 right-4 bg-white text-black rounded-lg shadow-lg p-4">
                   <h3 className="font-semibold">Node Color Legend</h3>
