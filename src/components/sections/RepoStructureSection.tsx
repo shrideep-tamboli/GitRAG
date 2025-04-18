@@ -275,7 +275,39 @@ export default function RepoStructureSection() {
                         : "bg-white text-gray-800"
                     }`}
                   >
-                    {msg.text}
+                    {msg.sender === "bot" ? (
+                      <ReactMarkdown 
+                        className="prose max-w-none text-gray-800" 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({children, ...props}) => (
+                            <h1 className="text-xl font-bold mt-4 mb-2" {...props}>{children}</h1>
+                          ),
+                          h2: ({children, ...props}) => (
+                            <h2 className="text-lg font-semibold mt-3 mb-2" {...props}>{children}</h2>
+                          ),
+                          h3: ({children, ...props}) => (
+                            <h3 className="text-base font-medium mt-2 mb-1" {...props}>{children}</h3>
+                          ),
+                          p: ({children, ...props}) => (
+                            <p className="mb-2" {...props}>{children}</p>
+                          ),
+                          ul: ({children, ...props}) => (
+                            <ul className="list-disc pl-4 mb-2" {...props}>{children}</ul>
+                          ),
+                          li: ({children, ...props}) => (
+                            <li className="mb-1" {...props}>{children}</li>
+                          ),
+                          strong: ({children, ...props}) => (
+                            <strong className="font-bold" {...props}>{children}</strong>
+                          )
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
+                    ) : (
+                      msg.text
+                    )}
                   </div>
                 </div>
               ))

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { HfInference } from "@huggingface/inference";
 import Groq from "groq-sdk";
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
 
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY!);
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -44,6 +45,36 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+async function fetchFileContent(url: string): Promise<string | null> {
+  try {
+    console.log("Fetching content from URL:", url);
+    
+    let response;
+    if (url.includes("raw.githubusercontent.com")) {
+      response = await axios.get(url);
+    } else if (url.includes("api.github.com/repos")) {
+      const parts = url.split('/repos/')[1].split('/contents/');
+      const repoPath = parts[0];
+      const filePath = parts.length > 1 ? parts[1] : '';
+      const rawUrl = `https://raw.githubusercontent.com/${repoPath}/main/${filePath}`;
+      
+      console.log("Transformed URL:", rawUrl);
+      response = await axios.get(rawUrl);
+    } else {
+      response = await axios.get(url);
+    }
+    
+    console.log("Content fetched successfully");
+    return response.data;
+  } catch (err) {
+    console.error("Error fetching file content:", err);
+    if (axios.isAxiosError(err)) {
+      return `Failed to load file content: ${err.message}. Status: ${err.response?.status || 'unknown'}`;
+    }
+    return "Failed to load file content due to unknown error.";
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -73,19 +104,38 @@ export async function POST(request: Request) {
 
     // Get the top 5 results
     const topResults = similarityResults.slice(0, 5);
-    console.log("Top 5 Results:", topResults);
+    
+    // Fetch file content for top results and structure the data
+    const structuredResults = await Promise.all(
+      topResults.map(async (result) => {
+        const fileContent = await fetchFileContent(result.url);
+        // Extract relative file path from the URL
+        const relativePath = result.url.includes('/repos/') 
+          ? result.url.split('/contents/')[1] 
+          : result.url.split('/main/')[1] || result.url;
 
-    // Format the context to include code summaries
-    const contextStr = topResults
-      .map(result => `[${result.url}]: ${result.codeSummary}`)
-      .join('\n');
+        return {
+          filePath: relativePath,
+          fileContent: fileContent || "No content available",
+          codeSummary: result.codeSummary
+        };
+      })
+    );
 
-    // system prompt
+    console.log("Structured Results:", JSON.stringify(structuredResults, null, 2));
+
+    // system prompt with structured context
     const systemPrompt = `You are an assistant for question-answering tasks.
-                          Use the following pieces of retrieved context to answer the question.
-                          If you don't know the answer, just say that you don't know.
-                          Use three sentences maximum and keep the answer concise.
-                          Context: ${contextStr}`;
+                         Use the following structured context to answer the question.
+                         Each file in the context contains:
+                         - filePath: The relative path of the file
+                         - fileContent: The actual code content of the file
+                         - codeSummary: A summary of what the code does
+                         
+                         If you don't know the answer, just say that you don't know.
+                         Use three sentences maximum and keep the answer concise.
+                         
+                         Context: ${JSON.stringify(structuredResults, null, 2)}`;
 
     const response = await groq.chat.completions.create({
       messages: [
@@ -98,7 +148,7 @@ export async function POST(request: Request) {
           content: body.message,
         },
       ],
-      model: "llama-3.3-70b-versatile",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
     });
 
     console.log("Groq Response:", response.choices[0].message.content);
