@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { HfInference } from "@huggingface/inference";
-import Groq from "groq-sdk";
+import { GoogleGenAI } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY!);
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -137,28 +137,33 @@ export async function POST(request: Request) {
                          
                          Context: ${JSON.stringify(structuredResults, null, 2)}`;
 
-    const response = await groq.chat.completions.create({
-      messages: [
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [
         {
-          role: "system",
-          content: systemPrompt,
+          role: "user",
+          parts: [{ text: systemPrompt }]
         },
         {
           role: "user",
-          content: body.message,
-        },
-      ],
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+          parts: [{ text: body.message }]
+        }
+      ]
     });
 
-    console.log("Groq Response:", response.choices[0].message.content);
+    if (!response.candidates?.[0]?.content?.parts?.[0]?.text) {
+      throw new Error("Failed to generate response");
+    }
 
-    // Store chat data in Supabase
+    const responseText = response.candidates[0].content.parts[0].text;
+    console.log("Gemini Response:", responseText);
+
+    // Update Supabase storage with new response format
     const { error: insertError } = await supabase
       .from('chat_data')
       .insert({
         user_query: body.message,
-        bot_response: response.choices[0].message.content,
+        bot_response: responseText,
         context_urls: topResults.map(result => result.url),
         similarity_scores: topResults.map(result => ({
           url: result.url,
@@ -170,7 +175,11 @@ export async function POST(request: Request) {
       console.error('Error storing chat data:', insertError);
     }
 
-    return NextResponse.json({ success: true, results: similarityResults, response: response.choices[0].message.content });
+    return NextResponse.json({ 
+      success: true, 
+      results: similarityResults, 
+      response: responseText 
+    });
   } catch (error) {
     console.error("Error processing chat request:", error);
     return NextResponse.json(

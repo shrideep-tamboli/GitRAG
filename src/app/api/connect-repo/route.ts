@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
-import { ChatGroq } from "@langchain/groq";
-import { SystemMessage } from "@langchain/core/messages";
 import { get_encoding } from "tiktoken";
+import { GoogleGenAI } from "@google/genai";
 
 // Define an interface for the metadata returned from the code summary.
 interface CodeSummaryMetadata {
@@ -53,7 +52,7 @@ function countTokens(text: string): number {
   return encoding.encode(text).length;
 }
 
-// Function to get code summary using Groq.
+// Function to get code summary using Google's Gemini model.
 // Replaced "any" with the proper CodeSummaryMetadata type.
 // Note the metadata is now coerced to null if undefined.
 async function getCodeSummary(code: string): Promise<{
@@ -62,50 +61,56 @@ async function getCodeSummary(code: string): Promise<{
   current_input_token: number;
 }> {
   try {
-    // Add delay to avoid rate limits
-    await delay(1000); // 1 second delay between requests
+    await delay(1000); // Keep the delay to avoid rate limits
 
     const system_prompt = `Analyze the provided code and return a detailed summary in a valid JSON format. Your response should include (but is not limited to) the following keys:
-      
-{
-  "overall_summary": "A comprehensive explanation of what the code does, its purpose, and high-level functionality.",
-  "functions": "A list of all the functions defined in the code along with a brief description of each function's purpose, parameters, and return values (if identifiable).",
-  "classes": "If applicable, a list of classes defined in the code, along with their key methods and attributes.",
-  "variables": "Important global or significant variables used in the code, including constants.",
-  "dependencies": {
-    "external_libraries": "Any external libraries, frameworks, or modules imported and used in the code.",
-    "file_dependencies": "Any other files or modules (both frontend and backend) that the code depends on for data (e.g., files from which data is sent or received, API endpoints, etc.)."
-  },
-  "requests": "Identify and list all HTTP requests (GET, POST, PUT, DELETE, etc.) made in the code along with their endpoints and a brief description of their purpose.",
-  "file_system_operations": "Any file system operations performed (reading/writing files, accessing directories, etc.).",
-  "additional_notes": "Any other relevant details or observations that may help in understanding the code (such as design patterns, error handling, comments, etc.)."
-}
+                {
+                  "overall_summary": "A comprehensive explanation of what the code does, its purpose, and high-level functionality.",
+                  "functions": "A list of all the functions defined in the code along with a brief description of each function's purpose, parameters, and return values (if identifiable).",
+                  "classes": "If applicable, a list of classes defined in the code, along with their key methods and attributes.",
+                  "variables": "Important global or significant variables used in the code, including constants.",
+                  "dependencies": {
+                    "external_libraries": "Any external libraries, frameworks, or modules imported and used in the code.",
+                    "file_dependencies": "Any other files or modules (both frontend and backend) that the code depends on for data (e.g., files from which data is sent or received, API endpoints, etc.)."
+                  },
+                  "requests": "Identify and list all HTTP requests (GET, POST, PUT, DELETE, etc.) made in the code along with their endpoints and a brief description of their purpose.",
+                  "file_system_operations": "Any file system operations performed (reading/writing files, accessing directories, etc.).",
+                  "additional_notes": "Any other relevant details or observations that may help in understanding the code (such as design patterns, error handling, comments, etc.)."
+                }
 
-Please ensure that the output is valid JSON and use the keys above as a guideline. Do not include any extra keys or text outside the JSON structure.
+                Please ensure that the output is valid JSON and use the keys above as a guideline. Do not include any extra keys or text outside the JSON structure.
 
-Here is the code to analyze:
+                Here is the code to analyze: ${code}`;
 
-${code}`;
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const model = new ChatGroq({
-      model: "gemma2-9b-it",
-      temperature: 0,
-    });
-
-    // Use our custom countTokens function for a consistent token count.
+    // Use our custom countTokens function for a consistent token count
     const current_input_token = countTokens(code);
     console.log("Number of Input Tokens", current_input_token);
 
-    const messages = [new SystemMessage(system_prompt)];
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: system_prompt,
+    });
 
-    const res = await model.invoke(messages);
+    if (!response.candidates?.[0]?.content?.parts?.[0]?.text) {
+      throw new Error("Failed to generate summary: No response text");
+    }
 
-    console.log("Code Summary", res.content.toString());
-    console.log("Token Usage", res.usage_metadata);
+    const responseText = response.candidates[0].content.parts[0].text;
+    console.log("Code Summary", responseText);
+
+    // Since Gemini might not provide usage metadata directly, we'll estimate it
+    const output_tokens = countTokens(responseText);
+    const metadata = {
+      input_tokens: current_input_token,
+      output_tokens: output_tokens,
+      total_tokens: current_input_token + output_tokens
+    };
 
     return {
-      summary: res.content.toString(),
-      metadata: res.usage_metadata ?? null,
+      summary: responseText,
+      metadata,
       current_input_token,
     };
   } catch (error) {

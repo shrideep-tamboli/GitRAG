@@ -175,7 +175,7 @@ export default function ConnectRepoSection({ onRepoConnected }: ConnectRepoSecti
                     </div>
 
                     <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3] p-4">
-                      <ul className="list-none">
+                      <ul className="list-none max-h-[240px] overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                         {contents.map((item, index) => (
                           <li key={index} className="mb-2 flex items-start">
                             <span className="text-gray-600 mr-2">├─</span>
