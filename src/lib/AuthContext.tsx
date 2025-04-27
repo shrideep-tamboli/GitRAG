@@ -67,6 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithProvider = async (provider: 'google' | 'github') => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
+      options: {
+        redirectTo: process.env.NEXT_PUBLIC_SITE_URL,
+      },
     })
     if (error) throw error
   }
