@@ -1,4 +1,4 @@
-https://discord.gg/whVEEZ8w
+Join the contributors at https://discord.gg/whVEEZ8w
 
 ### Aim:
 
