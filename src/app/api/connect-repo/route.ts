@@ -25,7 +25,7 @@ const blacklistedDirKeywords = [
   "extensions",
   "deployment",
   "public",
-  "venv",
+  "venv", ".ico"
 ];
 
 // Helper function to check if an item is blacklisted

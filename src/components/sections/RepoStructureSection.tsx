@@ -212,6 +212,8 @@ export default function RepoStructureSection() {
     setChatInput("")
     setIsTyping(true)
 
+    console.time("Chat API Response Time")
+
     try {
       const response = await axios.post("/api/chat", {
         message: userMessage,
@@ -224,6 +226,7 @@ export default function RepoStructureSection() {
       console.error("Error sending chat message:", err)
       setMessages((prev) => [{ sender: "bot", text: "Error: Failed to get response." }, ...prev])
     } finally {
+      console.timeEnd("Chat API Response Time")
       setIsTyping(false)
     }
   }

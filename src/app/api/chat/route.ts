@@ -19,13 +19,30 @@ interface Summary {
 
 async function generateEmbeddings(text: string): Promise<number[]> {
   try {
-    const response = await hf.featureExtraction({
-      model: "sentence-transformers/all-MiniLM-L6-v2",
-      inputs: text,
-    });
-    return response as number[];
+    // Try direct axios call to debug the issue
+    const response = await axios.post(
+      'https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2',
+      { inputs: text },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('Raw API Response:', JSON.stringify(response.data, null, 2));
+    return response.data;
   } catch (error) {
     console.error("Error generating embeddings:", error);
+    if (axios.isAxiosError(error)) {
+      console.error("Full error response:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers
+      });
+    }
     throw error;
   }
 }
