@@ -12,6 +12,6 @@ The documentation will change as GitRag aims to find the most efficient way to c
 Want to contribute? See the next goals at contribution.md
 
 ## Getting Started
-1. Open the terminal in a suitable path or foler and run the command `git clone https://gitrag.in/`
+1. Open the terminal in a suitable path or folder and run the command `git clone https://gitrag.in/`
 2. Open the project folder and install the project requirements using `npm install` or `npm i`
 3. Start making changes according to the requirements 
