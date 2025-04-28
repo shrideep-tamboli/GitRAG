@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { HfInference } from "@huggingface/inference";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY!);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
