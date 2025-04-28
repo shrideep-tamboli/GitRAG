@@ -1,4 +1,4 @@
-[[Notebook]](https://colab.research.google.com/drive/1Ss4u542XUhT8eZ3GmyecGPjyi1pRzHHb?usp=sharing)
+https://discord.gg/whVEEZ8w
 
 ### Aim:
 
