@@ -1,5 +1,7 @@
 # GitRag
 
+img
+license
 Join the community of contributors at https://discord.gg/whVEEZ8w
 
 ## 🚀 Features
