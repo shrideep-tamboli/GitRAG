@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/shrideep-tamboli/GitRAG/blob/main/LICENSE)
 
-[![Discord](https://img.shields.io/discord/1080191161458774027?label=GitRag&logo=discord&style=flat)](https://discord.gg/K897HuZjgB)
+[![Discord](https://img.shields.io/discord/1366502214419484772?label=GitRag&logo=discord&style=flat)](https://discord.gg/K897HuZjgB)
 
 
 ## 🚀 Features
