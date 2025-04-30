@@ -1,10 +1,9 @@
 # GitRag
 
-img
+[![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/shrideep-tamboli/GitRAG/blob/main/LICENSE)
 
-license
+[![Discord](https://img.shields.io/discord/your-discord-id?label=Gitingest&logo=discord&style=flat)](https://discord.gg/whVEEZ8w)
 
-Join the community of developers at https://discord.gg/whVEEZ8w
 
 ## 🚀 Features
 - Connect and chat with repositories
