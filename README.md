@@ -11,10 +11,10 @@
 - Generate codes for the latest frameworks by plugging in the repository url
 
 ## 📄 Documentation
-The documentation will change as GitRag aims to find the most efficient way to chat with a repository. Read more on documentation.md
+The documentation will change as GitRag aims to find the most efficient way to chat with a repository. Read more on [documentation.md](https://github.com/shrideep-tamboli/GitRAG/blob/main/documentation.md)
 
 ## Contribution
-Want to contribute? See the next goals at contribution.md
+Want to contribute? See the next goals at [contributing.md](https://github.com/shrideep-tamboli/GitRAG/blob/main/CONTRIBUTING.md)
 
 ## Getting Started
 1. Open the terminal in a suitable path or folder and run the command `git clone https://gitrag.in/`
