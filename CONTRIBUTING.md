@@ -31,6 +31,36 @@ To help you navigate the project:
 ---
 
 ## 🛠️ Getting Started Locally
-`git clone https://github.com/[your-username]/gitrag.git` <br>
-`cd gitrag` <br>
+1. Fork this repo: https://github.com/shrideep-tamboli/GitRAG
+2. Clone the forked repo <br>
+```bash
+git clone https://github.com/your-user-name/gitrag.git
+cd gitrag
+```
+3. Install dependencies
 `npm install` <br>
+4. Create a new branch for your changes
+```bash
+git checkout -b your-branch
+```
+5. Make your changes. Make sure to add corresponding tests for your changes.
+6. Test your changes to see if it is working expectedly in the local server
+```bash
+npm run dev
+``` 
+8. Build in local before commiting your changes to git <br>
+```bash
+npm run build
+```
+9. Iterate over steps 7 and 8 until all checks are met.
+10. Commit your changes
+```bash
+git commit -m "Your commit message"
+```
+11. Push your changes
+```bash
+git push origin your-branch
+```
+12. Open a pull request on GitHub. Make sure to include a detailed description of your changes.
+13. Wait for the maintainers to review your pull request. If there are any issues, fix them and repeat steps 5 to 12.
+(Optional) Invite project maintainer to your branch for easier collaboration.
