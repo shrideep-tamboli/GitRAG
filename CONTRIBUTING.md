@@ -8,9 +8,9 @@ We welcome meaningful contributions that improve performance, usability, or reli
 
 ## How to Contribute (non-technical)
 
-- **Create an Issue**: If you find a bug or have an idea for a new feature, please [create an issue](https://github.com/cyclotruc/gitingest/issues/new) on GitHub. This will help us track and prioritize your request.
-- **Spread the Word**: If you like Gitingest, please share it with your friends, colleagues, and on social media. This will help us grow the community and make Gitingest even better.
-- **Use Gitingest**: The best feedback comes from real-world usage! If you encounter any issues or have ideas for improvement, please let us know by [creating an issue](https://github.com/cyclotruc/gitingest/issues/new) on GitHub or by reaching out to us on [Discord](https://discord.com/invite/zerRaGK9EC).
+- **Create an Issue**: If you find a bug or have an idea for a new feature, please [create an issue](https://github.com/shrideep-tamboli/gitrag/issues/new) on GitHub. This will help us track and prioritize your request.
+- **Spread the Word**: If you like GitRag, please share it with your friends, colleagues, and on social media. This will help us grow the community and make GitRag even better.
+- **Use GitRag**: The best feedback comes from real-world usage! If you encounter any issues or have ideas for improvement, please let us know by [creating an issue](https://github.com/shrideep-tamboli/gitrag/issues/new) on GitHub or by reaching out to us on [Discord](https://discord.gg/K897HuZjgB).
 
 ## How to Contribute (Technical)
 
