@@ -20,17 +20,7 @@ Hop into the #general channel to contribute on the current technical requirement
 
 ---
 
-## 📦 Tech Stack
-
-To help you navigate the project:
-
-- **Frontend**: Next.js, Tailwind CSS, Shadcn UI, Framer Motion
-- **Backend**: Node.js, Neo4j (via Bolt), Hugging Face APIs for embeddings, LLM from Gemini 
-- **Graph**: Nodes and relationships represent files, summaries, types, and vectors
-
----
-
-## 🛠️ Getting Started Locally
+## 🛠️ Getting Started 
 1. Fork this repo: https://github.com/shrideep-tamboli/GitRAG
 2. Clone the forked repo <br>
 ```bash
@@ -62,5 +52,15 @@ git commit -m "Your commit message"
 git push origin your-branch
 ```
 12. Open a pull request on GitHub. Make sure to include a detailed description of your changes.
-13. Wait for the maintainers to review your pull request. If there are any issues, fix them and repeat steps 5 to 12.
-(Optional) Invite project maintainer to your branch for easier collaboration.
+13. Wait for the maintainers to review your pull request. If there are any issues, fix them and repeat steps 5 to 12. <br>
+<i>(Optional) Invite project maintainer to your branch for easier collaboration. </i>
+
+---
+
+## 📦 Tech Stack
+
+To help you navigate the project:
+
+- **Frontend**: Next.js, Tailwind CSS, Shadcn UI, Framer Motion
+- **Backend**: Node.js, Neo4j (via Bolt), Hugging Face APIs for embeddings, LLM from Gemini 
+- **Graph**: Nodes and relationships represent files, summaries, types, and vectors
