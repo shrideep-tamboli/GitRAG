@@ -1,6 +1,6 @@
 # Contributing to GitRag
 
-🎉 Thanks for your interest in contributing to GitRag — a repository knowledge graph powered by Neo4j and vectorized with Hugging Face embeddings.
+🎉 Thanks for your interest in contributing to GitRag — Our goal is to provide the user the ability to chat with their repositories. MVP is ready and live. Next goal is to make it more efficient in terms of token usage and time complexity.
 
 We welcome meaningful contributions that improve performance, usability, or reliability. Please read the following guidelines before submitting your pull request.
 
