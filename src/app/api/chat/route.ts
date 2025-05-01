@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { HfInference } from "@huggingface/inference";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY!);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,30 +19,13 @@ interface Summary {
 
 async function generateEmbeddings(text: string): Promise<number[]> {
   try {
-    // Try direct axios call to debug the issue
-    const response = await axios.post(
-      'https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2',
-      { inputs: text },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    console.log('Raw API Response:', JSON.stringify(response.data, null, 2));
-    return response.data;
+    const response = await hf.featureExtraction({
+      model: "sentence-transformers/all-MiniLM-L6-v2",
+      inputs: text,
+    });
+    return response as number[];
   } catch (error) {
     console.error("Error generating embeddings:", error);
-    if (axios.isAxiosError(error)) {
-      console.error("Full error response:", {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        headers: error.response?.headers
-      });
-    }
     throw error;
   }
 }
@@ -63,7 +48,7 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 async function fetchFileContent(url: string): Promise<string | null> {
   try {
     console.log("Fetching content from URL:", url);
-    
+
     let response;
     if (url.includes("raw.githubusercontent.com")) {
       response = await axios.get(url);
@@ -72,13 +57,13 @@ async function fetchFileContent(url: string): Promise<string | null> {
       const repoPath = parts[0];
       const filePath = parts.length > 1 ? parts[1] : '';
       const rawUrl = `https://raw.githubusercontent.com/${repoPath}/main/${filePath}`;
-      
+
       console.log("Transformed URL:", rawUrl);
       response = await axios.get(rawUrl);
     } else {
       response = await axios.get(url);
     }
-    
+
     console.log("Content fetched successfully");
     return response.data;
   } catch (err) {
@@ -119,7 +104,7 @@ export async function POST(request: Request) {
 
     // Get the top 5 results
     const topResults = similarityResults.slice(0, 5);
-    
+
     // Fetch file content for top results and structure the data
     const structuredResults = await Promise.all(
       topResults.map(async (result) => {
