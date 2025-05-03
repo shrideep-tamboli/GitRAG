@@ -14,12 +14,11 @@ export default function Home() {
 
   return (
     <main className="flex flex-col">
-      {user && (
-        <>
-          <ConnectRepoSection onRepoConnected={() => setShowRepoStructure(true)} />
-          {showRepoStructure && <RepoStructureSection />}
-        </>
-      )}
+      <ConnectRepoSection 
+        onRepoConnected={() => setShowRepoStructure(true)} 
+        isLoggedIn={!!user}
+      />
+      {user && showRepoStructure && <RepoStructureSection />}
     </main>
   )
 }
