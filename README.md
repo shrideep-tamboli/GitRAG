@@ -1,4 +1,5 @@
 # GitRag
+![image](https://github.com/user-attachments/assets/328cf8f3-0677-4894-8a3f-5e514e53d17f)
 
 [![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/shrideep-tamboli/GitRAG/blob/main/LICENSE)
 
