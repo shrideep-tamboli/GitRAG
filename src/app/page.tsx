@@ -1,5 +1,4 @@
 "use client"
-import HomeSection from "@/components/sections/HomeSection"
 import ConnectRepoSection from "@/components/sections/ConnectRepoSection"
 import RepoStructureSection from "@/components/sections/RepoStructureSection"
 import { useAuth } from '@/lib/AuthContext'
@@ -15,7 +14,6 @@ export default function Home() {
 
   return (
     <main className="flex flex-col">
-      <HomeSection />
       {user && (
         <>
           <ConnectRepoSection onRepoConnected={() => setShowRepoStructure(true)} />

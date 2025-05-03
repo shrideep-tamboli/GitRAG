@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ProfileDropdown } from './ProfileDropdown'
+import { ProfileDropdown } from '../ProfileDropdown'
 import { FaGithub } from 'react-icons/fa'
 
 export function Header() {
@@ -11,7 +11,7 @@ export function Header() {
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
               <span className="text-xl font-bold text-gray-900">
-                Git<span className="text-[#FE4A60]">Rag</span>
+                Git<span className="text-[#F6A55f]">Rag</span>
               </span>
             </Link>
           </div>

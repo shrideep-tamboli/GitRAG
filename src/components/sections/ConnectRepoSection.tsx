@@ -7,8 +7,18 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Copy, ExternalLink, Github, GitBranch, GitFork, Loader2, LinkIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
+import {
+  Copy,
+  ExternalLink,
+  Github,
+  GitBranch,
+  GitFork,
+  Loader2,
+  LinkIcon,
+  MessageSquare,
+  Search,
+  Sparkles,
+} from "lucide-react"
 
 interface RepoItem {
   name: string
@@ -109,7 +119,7 @@ export default function ConnectRepoSection({ onRepoConnected }: ConnectRepoSecti
         setRepoUrl(url)
         setInputRepoUrl("")
         setActiveTab("connected")
-        setStatusMessage(`Successfully connected to ${(url)}`)
+        setStatusMessage(`Successfully connected to ${url}`)
 
         await fetch("/api/repo-structure", {
           method: "POST",
@@ -125,7 +135,7 @@ export default function ConnectRepoSection({ onRepoConnected }: ConnectRepoSecti
 
         setVectorizing(true)
         setVectorizeMessage("")
-        setStatusMessage(`Vectorizing ${(url)}...`)
+        setStatusMessage(`Vectorizing ${url}...`)
         try {
           const vectorizeRes = await fetch("/api/vectorize", {
             method: "POST",
@@ -168,255 +178,262 @@ export default function ConnectRepoSection({ onRepoConnected }: ConnectRepoSecti
 
   return (
     <section id="connect-repo" className="py-12 px-4 max-w-6xl mx-auto">
-      <Card className="border-2 border-gray-800/20 rounded-xl bg-[#fdf6e3] shadow-lg overflow-hidden">
-        <CardHeader className="pb-2 border-b border-gray-800/10">
-          <CardTitle className="text-2xl font-bold flex items-center gap-2 text-gray-800">
-            <GitBranch className="h-6 w-6" />
-            Repository Connection
-          </CardTitle>
-          <CardDescription className="text-gray-600">
-            Connect to a Git repository to analyze its structure and content
-          </CardDescription>
-        </CardHeader>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <div className="flex flex-col justify-center space-y-6">
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="px-6 pt-4">
-            <TabsList className="grid w-full grid-cols-2 bg-[#f9f9f7] p-1 rounded-lg">
-              <TabsTrigger
-                value="connect"
-                className="rounded-md data-[state=active]:bg-[#f8b878] data-[state=active]:text-gray-800 text-gray-600"
-              >
-                Connect Repository
-              </TabsTrigger>
-              <TabsTrigger
-                value="connected"
-                disabled={!repoUrl}
-                className="rounded-md data-[state=active]:bg-[#f8b878] data-[state=active]:text-gray-800 text-gray-600"
-              >
-                Connected Repository
-                {repoUrl && (
-                  <Badge variant="outline" className="ml-2 bg-green-100 text-green-800 border-green-200">
-                    1
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
+          {/* Main heading with gradient */}
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
+            <span className="bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">Chat with</span>
+            <br />
+            <span className="bg-gradient-to-r from-[#f8b878] to-[#f6a55f] bg-clip-text text-transparent">
+              Github Repository
+            </span>
+          </h1>
+
+          {/* Feature list */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center gap-3">
+              <div className="bg-[#f8b878]/20 p-2 rounded-full">
+                <MessageSquare className="h-5 w-5 text-[#f6a55f]" />
+              </div>
+              <span className="text-gray-700">Ask questions about your code</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="bg-[#f8b878]/20 p-2 rounded-full">
+                <Search className="h-5 w-5 text-[#f6a55f]" />
+              </div>
+              <span className="text-gray-700">Search through repository content</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="bg-[#f8b878]/20 p-2 rounded-full">
+                <Sparkles className="h-5 w-5 text-[#f6a55f]" />
+              </div>
+              <span className="text-gray-700">Get AI-powered code explanations</span>
+            </div>
           </div>
 
-          <TabsContent value="connect" className="p-6 pt-4">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label htmlFor="repo-url" className="text-sm font-medium text-gray-700">
-                  Repository URL
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Github className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                    <Input
-                      id="repo-url"
-                      type="text"
-                      value={inputRepoUrl}
-                      onChange={(e) => setInputRepoUrl(e.target.value)}
-                      placeholder="   https://github.com/username/repository"
-                      className="pl-10 border-2 border-gray-800/20 rounded-lg p-3 bg-white text-gray-800 focus:border-gray-800/40 focus:ring-0"
-                    />
-                  </div>
-                  <Button
-                    onClick={() => handleConnect()}
-                    disabled={loading || vectorizing || !inputRepoUrl}
-                    className="whitespace-nowrap rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium px-6 hover:bg-[#f6a55f] hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Connecting...
-                      </>
-                    ) : vectorizing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Vectorizing...
-                      </>
-                    ) : (
-                      "Connect"
-                    )}
-                  </Button>
-                </div>
-                {error && <div className="text-sm text-red-500 mt-1">{error}</div>}
-                {statusMessage && !error && (
-                  <div className="text-sm text-gray-700 mt-2 font-medium py-1">{statusMessage}</div>
-                )}
-                {vectorizeMessage && (
-                  <div className="text-sm text-gray-700 mt-2 font-medium py-1">{vectorizeMessage}</div>
-                )}
-              </div>
+        </div>
 
-              <div>
-                <h3 className="text-sm font-medium mb-3 text-gray-700">Quick Connect Examples</h3>
-                <div className="flex flex-wrap gap-2">
-                  {exampleRepos.map((repo) => (
-                    <Button
-                      key={repo.name}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleExampleClick(repo.url)}
-                      disabled={loading || vectorizing}
-                      className="flex items-center gap-1.5 bg-[#fdf6e3] border-2 border-gray-800/20 text-gray-800 px-4 py-2 rounded-lg hover:bg-[#f8b878] disabled:opacity-50"
-                    >
-                      <GitFork className="h-3.5 w-3.5" />
-                      {repo.name}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+        <Card className="border-2 border-gray-800/20 rounded-xl bg-[#fdf6e3] shadow-lg overflow-hidden">
+          <CardHeader className="pb-2 border-b border-gray-800/10">
+            <CardTitle className="text-2xl font-bold flex items-center gap-2 text-gray-800">
+              <GitBranch className="h-6 w-6" />
+              Repository Connection
+            </CardTitle>
+            <CardDescription className="text-gray-600">Connect to a Git repository to chat with it</CardDescription>
+          </CardHeader>
 
-              {contents.length > 0 && (
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-gray-700">Repository Contents</h3>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-gray-700 hover:bg-[#f8b878]/20 hover:text-gray-900"
-                    >
-                      <Copy className="h-3.5 w-3.5 mr-1.5" />
-                      Copy
-                    </Button>
-                  </div>
-                  <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3]">
-                    <CardContent className="p-3">
-                      <div className="max-h-[240px] overflow-y-auto pr-2 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
-                        {contents.map((item, index) => (
-                          <div key={index} className="flex items-start py-1 border-b border-gray-800/10 last:border-0">
-                            <div className="text-xs text-gray-600 mr-2 mt-0.5">{item.type === "dir" ? "📁" : "📄"}</div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm truncate text-gray-800">{item.name}</div>
-                              <div className="text-xs text-gray-600">{item.path}</div>
-                            </div>
-                            {item.download_url && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-[#f6a55f] hover:bg-[#f8b878]/20 hover:text-[#f6a55f]"
-                                asChild
-                              >
-                                <a href={item.download_url} target="_blank" rel="noopener noreferrer">
-                                  <ExternalLink className="h-3.5 w-3.5" />
-                                  <span className="sr-only">View</span>
-                                </a>
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <div className="px-6 pt-4">
+              <TabsList className="grid w-full grid-cols-2 bg-[#f9f9f7] p-1 rounded-lg">
+                <TabsTrigger
+                  value="connect"
+                  className="rounded-md data-[state=active]:bg-[#f8b878] data-[state=active]:text-gray-800 text-gray-600"
+                >
+                  Connect Repository
+                </TabsTrigger>
+                <TabsTrigger
+                  value="connected"
+                  disabled={!repoUrl}
+                  className="rounded-md data-[state=active]:bg-[#f8b878] data-[state=active]:text-gray-800 text-gray-600"
+                >
+                  Connected Repository
+                  {repoUrl && (
+                    <Badge variant="outline" className="ml-2 bg-green-100 text-green-800 border-green-200">
+                      1
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
             </div>
-          </TabsContent>
 
-          <TabsContent value="connected" className="p-6 pt-4">
-            {repoUrl ? (
+            <TabsContent value="connect" className="p-6 pt-4">
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-gray-700">Connected Repository URL</h3>
-                  <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3]">
-                    <CardContent className="p-4 flex items-center gap-2">
-                      <Github className="h-5 w-5 text-gray-600" />
-                      <div className="flex-1 font-mono text-sm break-all text-gray-800">{repoUrl}</div>
+                  <label htmlFor="repo-url" className="text-sm font-medium text-gray-700">
+                    Repository URL
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Github className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                      <Input
+                        id="repo-url"
+                        type="text"
+                        value={inputRepoUrl}
+                        onChange={(e) => setInputRepoUrl(e.target.value)}
+                        placeholder="   https://github.com/username/repository"
+                        className="pl-10 border-2 border-gray-800/20 rounded-lg p-3 bg-white text-gray-800 focus:border-gray-800/40 focus:ring-0"
+                      />
+                    </div>
+                    <Button
+                      onClick={() => handleConnect()}
+                      disabled={loading || vectorizing || !inputRepoUrl}
+                      className="whitespace-nowrap rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium px-6 hover:bg-[#f6a55f] hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Connecting...
+                        </>
+                      ) : vectorizing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Vectorizing...
+                        </>
+                      ) : (
+                        "Connect"
+                      )}
+                    </Button>
+                  </div>
+                  {error && <div className="text-sm text-red-500 mt-1">{error}</div>}
+                  {statusMessage && !error && (
+                    <div className="text-sm text-gray-700 mt-2 font-medium py-1">{statusMessage}</div>
+                  )}
+                  {vectorizeMessage && (
+                    <div className="text-sm text-gray-700 mt-2 font-medium py-1">{vectorizeMessage}</div>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-medium mb-3 text-gray-700">Quick Connect Examples</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {exampleRepos.map((repo) => (
+                      <Button
+                        key={repo.name}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExampleClick(repo.url)}
+                        disabled={loading || vectorizing}
+                        className="flex items-center gap-1.5 bg-[#fdf6e3] border-2 border-gray-800/20 text-gray-800 px-4 py-2 rounded-lg hover:bg-[#f8b878] disabled:opacity-50"
+                      >
+                        <GitFork className="h-3.5 w-3.5" />
+                        {repo.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {contents.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-gray-700">Repository Contents</h3>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-8 text-gray-700 hover:bg-[#f8b878]/20 hover:text-gray-900"
-                        onClick={() => navigator.clipboard.writeText(repoUrl)}
                       >
-                        <Copy className="h-3.5 w-3.5" />
-                        <span className="sr-only">Copy URL</span>
+                        <Copy className="h-3.5 w-3.5 mr-1.5" />
+                        Copy
                       </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-gray-700">Repository Status</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                    </div>
                     <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3]">
-                      <CardContent className="p-4 flex flex-col items-center justify-center">
-                        <div className="text-sm font-medium text-gray-600 mb-1">Connection</div>
-                        <div className="flex items-center text-green-600">
-                          <div className="h-2 w-2 rounded-full bg-green-600 mr-2"></div>
-                          Connected
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3]">
-                      <CardContent className="p-4 flex flex-col items-center justify-center">
-                        <div className="text-sm font-medium text-gray-600 mb-1">Vectorization</div>
-                        <div className={cn("flex items-center", vectorizing ? "text-amber-600" : "text-green-600")}>
-                          {vectorizing ? (
-                            <>
-                              <Loader2 className="h-3 w-3 animate-spin mr-2" />
-                              Processing
-                            </>
-                          ) : (
-                            <>
-                              <div className="h-2 w-2 rounded-full bg-green-600 mr-2"></div>
-                              Complete
-                            </>
-                          )}
+                      <CardContent className="p-3">
+                        <div className="max-h-[240px] overflow-y-auto pr-2 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+                          {contents.map((item, index) => (
+                            <div
+                              key={index}
+                              className="flex items-start py-1 border-b border-gray-800/10 last:border-0"
+                            >
+                              <div className="text-xs text-gray-600 mr-2 mt-0.5">
+                                {item.type === "dir" ? "📁" : "📄"}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm truncate text-gray-800">{item.name}</div>
+                                <div className="text-xs text-gray-600">{item.path}</div>
+                              </div>
+                              {item.download_url && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-[#f6a55f] hover:bg-[#f8b878]/20 hover:text-[#f6a55f]"
+                                  asChild
+                                >
+                                  <a href={item.download_url} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    <span className="sr-only">View</span>
+                                  </a>
+                                </Button>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </CardContent>
                     </Card>
                   </div>
-                </div>
-
-                <div className="pt-2">
-                  <Button
-                    onClick={() => {
-                      onRepoConnected()
-                      const repoStructureSection = document.getElementById("repo-structure")
-                      repoStructureSection?.scrollIntoView({ behavior: "smooth" })
-                    }}
-                    className="w-full rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium h-12 px-6 hover:bg-[#f6a55f] hover:shadow-md"
-                  >
-                    <LinkIcon className="mr-2 h-4 w-4" />
-                    View Repository Structure
-                  </Button>
-                </div>
-
-                <div className="pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveTab("connect")}
-                    className="w-full bg-[#fdf6e3] border-2 border-gray-800/20 text-gray-800 px-4 py-2 rounded-lg hover:bg-[#f8b878]"
-                  >
-                    Connect to a Different Repository
-                  </Button>
-                </div>
+                )}
               </div>
-            ) : (
-              <div className="py-8 text-center">
-                <div className="text-gray-600 mb-4">No repository connected yet</div>
-                <Button
-                  onClick={() => setActiveTab("connect")}
-                  className="rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium h-12 px-6 hover:bg-[#f6a55f] hover:shadow-md"
-                >
-                  Connect a Repository
-                </Button>
+            </TabsContent>
+
+            <TabsContent value="connected" className="p-6 pt-4">
+              {repoUrl ? (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-700">Connected Repository URL</h3>
+                    <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3]">
+                      <CardContent className="p-4 flex items-center gap-2">
+                        <Github className="h-5 w-5 text-gray-600" />
+                        <div className="flex-1 font-mono text-sm break-all text-gray-800">{repoUrl}</div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-gray-700 hover:bg-[#f8b878]/20 hover:text-gray-900"
+                          onClick={() => navigator.clipboard.writeText(repoUrl)}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          <span className="sr-only">Copy URL</span>
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      onClick={() => {
+                        onRepoConnected()
+                        const repoStructureSection = document.getElementById("repo-structure")
+                        repoStructureSection?.scrollIntoView({ behavior: "smooth" })
+                      }}
+                      className="w-full rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium h-12 px-6 hover:bg-[#f6a55f] hover:shadow-md"
+                    >
+                      <LinkIcon className="mr-2 h-4 w-4" />
+                      View Repository Structure
+                    </Button>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveTab("connect")}
+                      className="w-full bg-[#fdf6e3] border-2 border-gray-800/20 text-gray-800 px-4 py-2 rounded-lg hover:bg-[#f8b878]"
+                    >
+                      Connect to a Different Repository
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <div className="text-gray-600 mb-4">No repository connected yet</div>
+                  <Button
+                    onClick={() => setActiveTab("connect")}
+                    className="rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium h-12 px-6 hover:bg-[#f6a55f] hover:shadow-md"
+                  >
+                    Connect a Repository
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          <CardFooter className="flex justify-between border-t border-gray-800/10 p-4 bg-[#f9f9f7]/50">
+            <div className="text-xs text-gray-600">Connected as: {user?.email || "Guest"}</div>
+            {statusMessage && (
+              <div className="text-xs font-medium text-gray-700 max-w-[60%] truncate" title={statusMessage}>
+                {statusMessage}
               </div>
             )}
-          </TabsContent>
-        </Tabs>
-
-        <CardFooter className="flex justify-between border-t border-gray-800/10 p-4 bg-[#f9f9f7]/50">
-          <div className="text-xs text-gray-600">Connected as: {user?.email || "Guest"}</div>
-          {statusMessage && (
-            <div className="text-xs font-medium text-gray-700 max-w-[60%] truncate" title={statusMessage}>
-              {statusMessage}
-            </div>
-          )}
-        </CardFooter>
-      </Card>
+          </CardFooter>
+        </Card>
+      </div>
     </section>
   )
 }
