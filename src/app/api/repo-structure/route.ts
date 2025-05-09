@@ -14,7 +14,6 @@ export async function POST(req: Request) {
   try {
     const { repoUrl, repoStructure, userId } = await req.json();
     console.log('Received Repository Structure:', repoStructure);
-    console.log('Received Repo URL:', repoUrl);
 
     const firstUrl = repoUrl;
 
@@ -220,7 +219,6 @@ export async function GET(req: Request) {
       
       // Process all nodes first
       const allNodes = record.get('nodes') as Neo4jNode[];
-      console.log('Raw nodes from Neo4j:', allNodes);
       
       if (allNodes && Array.isArray(allNodes)) {
         allNodes.forEach((node: Neo4jNode) => {
@@ -242,7 +240,6 @@ export async function GET(req: Request) {
 
       // Process relationships
       const relationships = record.get('relationships') as Neo4jRelationship[];
-      console.log('Raw relationships from Neo4j:', relationships);
       
       if (relationships && Array.isArray(relationships)) {
         relationships.forEach((rel: Neo4jRelationship) => {

@@ -1,11 +1,34 @@
 import { NextResponse } from "next/server";
-import { HfInference } from "@huggingface/inference";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY!);
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Define proper types for Google AI embedding responses
+interface EmbeddingValue {
+  values: number[];
+}
+
+interface EmbeddingResponse {
+  embeddings: EmbeddingValue[];
+  data?: {
+    embeddings: number[][];
+  };
+}
+
+const ai = (() => {
+  if (process.env.GOOGLE_GENAI_USE_VERTEXAI === 'true') {
+    return new GoogleGenAI({
+      vertexai: true,
+      project: process.env.GOOGLE_CLOUD_PROJECT,
+      location: process.env.GOOGLE_CLOUD_LOCATION,
+    });
+  }
+  return new GoogleGenAI({
+    vertexai: false,
+    apiKey: process.env.GEMINI_API_KEY,
+  });
+})();
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -17,15 +40,27 @@ interface Summary {
   url: string;
 }
 
+// Replace HF embeddings with Google text-embedding-004
 async function generateEmbeddings(text: string): Promise<number[]> {
   try {
-    const response = await hf.featureExtraction({
-      model: "sentence-transformers/all-MiniLM-L6-v2",
-      inputs: text,
+    const response = await ai.models.embedContent({
+      model: 'text-embedding-004',
+      contents: text,
     });
-    return response as number[];
+
+    // The embeddings array may be under various paths depending on the API version
+    const typedResponse = response as EmbeddingResponse;
+    
+    // Try to extract embeddings from the response
+    if (typedResponse.embeddings?.[0]?.values && Array.isArray(typedResponse.embeddings[0].values)) {
+      return typedResponse.embeddings[0].values;
+    } else if (typedResponse.data?.embeddings?.[0] && Array.isArray(typedResponse.data.embeddings[0])) {
+      return typedResponse.data.embeddings[0];
+    }
+    
+    throw new Error('Invalid embedding response format');
   } catch (error) {
-    console.error("Error generating embeddings:", error);
+    console.error("Error generating embeddings with GoogleGenAI:", error);
     throw error;
   }
 }
@@ -83,15 +118,12 @@ export async function POST(request: Request) {
     const message_embedding = await generateEmbeddings(body.message);
     console.log("Query Embedding Dimension", message_embedding.length);
 
-    // Retrieve the summaries from the request body
     const summaries: Summary[] = body.summaries;
     console.log("User Query:", body.message);
 
-    // Log the list of URLs from the summaries
     const urls = summaries.map((summary) => summary.url);
     console.log("Number of items in the List of URLs:", urls.length);
 
-    // Compute cosine similarity for each summary (if embedding exists)
     const similarityResults = summaries
       .filter(summary => summary.summaryEmbedding !== null)
       .map(summary => {
@@ -99,19 +131,15 @@ export async function POST(request: Request) {
         return { score, url: summary.url, codeSummary: summary.codeSummary };
       });
 
-    // Sort the results in descending order based on the similarity score
     similarityResults.sort((a, b) => b.score - a.score);
 
-    // Get the top 5 results
     const topResults = similarityResults.slice(0, 5);
 
-    // Fetch file content for top results and structure the data
     const structuredResults = await Promise.all(
       topResults.map(async (result) => {
         const fileContent = await fetchFileContent(result.url);
-        // Extract relative file path from the URL
-        const relativePath = result.url.includes('/repos/') 
-          ? result.url.split('/contents/')[1] 
+        const relativePath = result.url.includes('/repos/')
+          ? result.url.split('/contents/')[1]
           : result.url.split('/main/')[1] || result.url;
 
         return {
@@ -124,7 +152,6 @@ export async function POST(request: Request) {
 
     console.log("Structured Results:", JSON.stringify(structuredResults, null, 2));
 
-    // system prompt with structured context
     const systemPrompt = `You are an assistant for question-answering tasks.
                          Use the following structured context to answer the question.
                          Each file in the context contains:
@@ -140,14 +167,8 @@ export async function POST(request: Request) {
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: [
-        {
-          role: "user",
-          parts: [{ text: systemPrompt }]
-        },
-        {
-          role: "user",
-          parts: [{ text: body.message }]
-        }
+        { role: "user", parts: [{ text: systemPrompt }] },
+        { role: "user", parts: [{ text: body.message }] }
       ]
     });
 
@@ -158,7 +179,6 @@ export async function POST(request: Request) {
     const responseText = response.candidates[0].content.parts[0].text;
     console.log("Gemini Response:", responseText);
 
-    // Update Supabase storage with new response format
     const { error: insertError } = await supabase
       .from('chat_data')
       .insert({
