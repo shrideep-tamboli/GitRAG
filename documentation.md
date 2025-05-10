@@ -13,7 +13,7 @@ GitRag aims to provide the best solution to chat with Github repositories. Curre
 ## 📦 Tech Stack
 - **Frontend**: Next.js, Tailwind CSS, Shadcn UI, Framer Motion
 - **Backend**: Node.js/Next.js, TypeScript
-- **Embedding Model**: all-MiniLM-L6-v2 by 🤗 
+- **Embedding Model**: text-embedding-004 by VertexAI (Google) 
 - **Vector Database**: Neo4J
 - **LLM**: Gemini 2.0 Flash
 - **Orchestration framework**: Langchain
