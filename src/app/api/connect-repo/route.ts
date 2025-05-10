@@ -10,7 +10,7 @@ interface CodeSummaryMetadata {
   total_tokens: number;
 }
 
-const blacklistedKeywords = ["LICENSE", "git", "docker", "Makefile", "config", "package"];
+const blacklistedKeywords = ["LICENSE", "git", "docker", "Makefile", "config", "package",".gif",".jpg",".jpeg",".png",".svg",".webp"];
 const blacklistedDirKeywords = [
   ".git",
   ".github",
@@ -63,6 +63,7 @@ async function getCodeSummary(code: string): Promise<{
   try {
     await delay(1000); // Keep the delay to avoid rate limits
 
+/*
     const system_prompt = `Analyze the provided code and return a detailed summary in a valid JSON format. Your response should include (but is not limited to) the following keys:
                 {
                   "overall_summary": "A comprehensive explanation of what the code does, its purpose, and high-level functionality.",
@@ -81,6 +82,10 @@ async function getCodeSummary(code: string): Promise<{
                 Please ensure that the output is valid JSON and use the keys above as a guideline. Do not include any extra keys or text outside the JSON structure.
 
                 Here is the code to analyze: ${code}`;
+*/
+
+    const system_prompt = `Generate concise comments for the following code describing the purpose of the code and the logic behind it. STRICTLY DO NOT include code syntaxes. 
+    Here is the code: ${code}`
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
