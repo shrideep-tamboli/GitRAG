@@ -63,6 +63,7 @@ export default function RepoStructureSection() {
   const [isTyping, setIsTyping] = useState(false)
   const messagesStartRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
+  const [threadId, setThreadId] = useState<string | null>(null);
 
   const fetchGraphData = useCallback(async () => {
     if (!user?.id) {
@@ -199,37 +200,47 @@ export default function RepoStructureSection() {
   )
 
   const handleSend = async () => {
-    if (!chatInput.trim()) return
+    if (!chatInput.trim()) return;
 
-    const summaries = graphData.nodes.map((node) => ({
-      codeSummary: node.codeSummary || "",
-      summaryEmbedding: node.summaryEmbedding || null,
-      url: node.id,
-    }))
-
-    const userMessage = chatInput
-    setMessages((prev) => [{ sender: "user", text: userMessage }, ...prev])
-    setChatInput("")
-    setIsTyping(true)
-
-    console.time("Chat API Response Time")
-
+    // Define a more specific type for the payload
+    const payload: {
+      message: string;
+      summaries: { codeSummary: string; summaryEmbedding: number[] | null; url: string }[];
+      threadId?: string;
+    } = {
+      message: chatInput,
+      summaries: graphData.nodes.map((node) => ({
+        codeSummary: node.codeSummary || "",
+        summaryEmbedding: node.summaryEmbedding || null,
+        url: node.id,
+      })),
+    };
+    if (threadId) payload.threadId = threadId;
+  
+    setMessages((prev) => [{ sender: "user", text: chatInput }, ...prev]);
+    setChatInput("");
+    setIsTyping(true);
+  
     try {
-      const response = await axios.post("/api/chat", {
-        message: userMessage,
-        summaries: summaries,
-      })
-      console.log("Chat response:", response.data)
-      const botReply = response.data.response
-      setMessages((prev) => [{ sender: "bot", text: botReply }, ...prev])
+      const { data } = await axios.post("/api/chat", payload);
+      // save the threadId returned by the server
+      if (data.threadId) setThreadId(data.threadId);
+  
+      // add bot reply
+      setMessages((prev) => [
+        { sender: "bot", text: data.response },
+        ...prev,
+      ]);
     } catch (err) {
-      console.error("Error sending chat message:", err)
-      setMessages((prev) => [{ sender: "bot", text: "Error: Failed to get response." }, ...prev])
+      console.error(err);
+      setMessages((prev) => [
+        { sender: "bot", text: "Error: Failed to get response." },
+        ...prev,
+      ]);
     } finally {
-      console.timeEnd("Chat API Response Time")
-      setIsTyping(false)
+      setIsTyping(false);
     }
-  }
+  };
 
   const closeSideCanvas = () => {
     setIsSideCanvasOpen(false)

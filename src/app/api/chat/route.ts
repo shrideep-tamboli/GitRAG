@@ -1,22 +1,36 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
+import { createClient } from "@supabase/supabase-js";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
+import Database from "better-sqlite3";
 
-// Define proper types for Google AI embedding responses
-interface EmbeddingValue {
-  values: number[];
-}
+// LangGraph imports
+import {
+  StateGraph,
+  MessagesAnnotation,
+  START,
+  END,
+} from "@langchain/langgraph";
+import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { trimMessages, HumanMessage } from "@langchain/core/messages";
 
+// --- Supabase setup ---
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// --- Google AI setup ---
+interface EmbeddingValue { values: number[] }
 interface EmbeddingResponse {
   embeddings: EmbeddingValue[];
-  data?: {
-    embeddings: number[][];
-  };
+  data?: { embeddings: number[][] };
 }
-
 const ai = (() => {
-  if (process.env.GOOGLE_GENAI_USE_VERTEXAI === 'true') {
+  if (process.env.GOOGLE_GENAI_USE_VERTEXAI === "true") {
     return new GoogleGenAI({
       vertexai: true,
       project: process.env.GOOGLE_CLOUD_PROJECT,
@@ -29,10 +43,52 @@ const ai = (() => {
   });
 })();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// --- Utility functions ---
+async function generateEmbeddings(text: string): Promise<number[]> {
+  const response = await ai.models.embedContent({
+    model: "text-embedding-004",
+    contents: text,
+  });
+  const typed = response as EmbeddingResponse;
+  if (typed.embeddings?.[0]?.values) {
+    return typed.embeddings[0].values;
+  }
+  if (typed.data?.embeddings?.[0]) {
+    return typed.data.embeddings[0];
+  }
+  throw new Error("Invalid embedding format");
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] ** 2;
+    nb += b[i] ** 2;
+  }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+async function fetchFileContent(url: string): Promise<string | null> {
+  try {
+    let resp;
+    if (url.includes("raw.githubusercontent.com")) {
+      resp = await axios.get(url);
+    } else if (url.includes("api.github.com/repos")) {
+      const parts = url.split("/repos/")[1].split("/contents/");
+      const rawUrl = `https://raw.githubusercontent.com/${parts[0]}/main/${parts[1]}`;
+      resp = await axios.get(rawUrl);
+    } else {
+      resp = await axios.get(url);
+    }
+    return resp.data;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      return `Error: ${e.message} (status ${e.response?.status})`;
+    }
+    return "Unknown fetch error";
+  }
+}
 
 interface Summary {
   codeSummary: string;
@@ -40,170 +96,107 @@ interface Summary {
   url: string;
 }
 
-// Replace HF embeddings with Google text-embedding-004
-async function generateEmbeddings(text: string): Promise<number[]> {
-  try {
-    const response = await ai.models.embedContent({
-      model: 'text-embedding-004',
-      contents: text,
-    });
-
-    // The embeddings array may be under various paths depending on the API version
-    const typedResponse = response as EmbeddingResponse;
-    
-    // Try to extract embeddings from the response
-    if (typedResponse.embeddings?.[0]?.values && Array.isArray(typedResponse.embeddings[0].values)) {
-      return typedResponse.embeddings[0].values;
-    } else if (typedResponse.data?.embeddings?.[0] && Array.isArray(typedResponse.data.embeddings[0])) {
-      return typedResponse.data.embeddings[0];
-    }
-    
-    throw new Error('Invalid embedding response format');
-  } catch (error) {
-    console.error("Error generating embeddings with GoogleGenAI:", error);
-    throw error;
-  }
-}
-
-// Helper function to compute cosine similarity between two vectors
-function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    normA += vecA[i] ** 2;
-    normB += vecB[i] ** 2;
-  }
-
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-async function fetchFileContent(url: string): Promise<string | null> {
-  try {
-    console.log("Fetching content from URL:", url);
-
-    let response;
-    if (url.includes("raw.githubusercontent.com")) {
-      response = await axios.get(url);
-    } else if (url.includes("api.github.com/repos")) {
-      const parts = url.split('/repos/')[1].split('/contents/');
-      const repoPath = parts[0];
-      const filePath = parts.length > 1 ? parts[1] : '';
-      const rawUrl = `https://raw.githubusercontent.com/${repoPath}/main/${filePath}`;
-
-      console.log("Transformed URL:", rawUrl);
-      response = await axios.get(rawUrl);
-    } else {
-      response = await axios.get(url);
-    }
-
-    console.log("Content fetched successfully");
-    return response.data;
-  } catch (err) {
-    console.error("Error fetching file content:", err);
-    if (axios.isAxiosError(err)) {
-      return `Failed to load file content: ${err.message}. Status: ${err.response?.status || 'unknown'}`;
-    }
-    return "Failed to load file content due to unknown error.";
-  }
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const msg = body.message as string;
+    const summaries = body.summaries as Summary[];
 
-    // Generate the embedding for the input query
-    const message_embedding = await generateEmbeddings(body.message);
-    console.log("Query Embedding Dimension", message_embedding.length);
+    // 1) Embed the user query
+    const queryEmbedding = await generateEmbeddings(msg);
 
-    const summaries: Summary[] = body.summaries;
-    console.log("User Query:", body.message);
+    // 2) Compute top-3 similar summaries
+    const sims = summaries
+      .filter((s) => s.summaryEmbedding)
+      .map((s) => ({
+        ...s,
+        score: cosineSimilarity(queryEmbedding, s.summaryEmbedding!),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
 
-    const urls = summaries.map((summary) => summary.url);
-    console.log("Number of items in the List of URLs:", urls.length);
-
-    const similarityResults = summaries
-      .filter(summary => summary.summaryEmbedding !== null)
-      .map(summary => {
-        const score = cosineSimilarity(message_embedding, summary.summaryEmbedding!);
-        return { score, url: summary.url, codeSummary: summary.codeSummary };
-      });
-
-    similarityResults.sort((a, b) => b.score - a.score);
-
-    const topResults = similarityResults.slice(0, 5);
-
-    const structuredResults = await Promise.all(
-      topResults.map(async (result) => {
-        const fileContent = await fetchFileContent(result.url);
-        const relativePath = result.url.includes('/repos/')
-          ? result.url.split('/contents/')[1]
-          : result.url.split('/main/')[1] || result.url;
-
-        return {
-          filePath: relativePath,
-          fileContent: fileContent || "No content available",
-          codeSummary: result.codeSummary
-        };
-      })
+    // 3) Fetch file contents and build context
+    const structured = await Promise.all(
+      sims.map(async (s) => ({
+        filePath: s.url.includes("/contents/")
+          ? s.url.split("/contents/")[1]
+          : s.url.split("/main/")[1] || s.url,
+        fileContent: (await fetchFileContent(s.url)) || "No content",
+        codeSummary: s.codeSummary,
+      }))
     );
 
-    console.log("Structured Results:", JSON.stringify(structuredResults, null, 2));
+    // 4) Escape all braces in the JSON context so LangChain’s template parser won’t choke
+    const contextStr = JSON.stringify(structured, null, 2)
+      .replace(/[{]/g, "{{")
+      .replace(/[}]/g, "}}");
 
-    const systemPrompt = `You are an assistant for question-answering tasks.
-                         Use the following structured context to answer the question.
-                         Each file in the context contains:
-                         - filePath: The relative path of the file
-                         - fileContent: The actual code content of the file
-                         - codeSummary: A summary of what the code does
-                         
-                         If you don't know the answer, just say that you don't know.
-                         Use three sentences maximum and keep the answer concise.
-                         
-                         Context: ${JSON.stringify(structuredResults, null, 2)}`;
+    // 5) Build a prompt template
+    const promptTemplate = ChatPromptTemplate.fromMessages([
+      [
+        "system",
+        `You are a concise assistant. Use the following files as context (path, content, summary)
+        to answer the user's question in ≤3 sentences:${contextStr}`,
+      ],
+      ["placeholder", "{messages}"],
+    ]);
 
-    const response = await ai.models.generateContent({
+    // 6) LLM wrapper & trimmer
+    const llm = new ChatGoogleGenerativeAI({
       model: "gemini-2.0-flash",
-      contents: [
-        { role: "user", parts: [{ text: systemPrompt }] },
-        { role: "user", parts: [{ text: body.message }] }
-      ]
+      apiKey: process.env.GEMINI_API_KEY,
+    });
+    const trimmer = trimMessages({
+      maxTokens: 4000,
+      strategy: "last",
+      includeSystem: true,
+      allowPartial: false,
+      tokenCounter: (ms) => ms.length,
     });
 
-    if (!response.candidates?.[0]?.content?.parts?.[0]?.text) {
-      throw new Error("Failed to generate response");
-    }
+    // 7) Define the graph node
+    const callModel = async (state: typeof MessagesAnnotation.State) => {
+      const msgs = await trimmer.invoke(state.messages);
+      const prompt = await promptTemplate.invoke({ messages: msgs });
+      const res = await llm.invoke(prompt);
+      return { messages: [res] };
+    };
 
-    const responseText = response.candidates[0].content.parts[0].text;
-    console.log("Gemini Response:", responseText);
+    // 8) Initialize better-sqlite3 and the SqliteSaver correctly
+    const db = new Database("./chat-history.sqlite");
+    const checkpointer = new SqliteSaver(db);
+    const graph = new StateGraph(MessagesAnnotation)
+      .addNode("model", callModel)
+      .addEdge(START, "model")
+      .addEdge("model", END)
+      .compile({ checkpointer });
 
-    const { error: insertError } = await supabase
-      .from('chat_data')
-      .insert({
-        user_query: body.message,
-        bot_response: responseText,
-        context_urls: topResults.map(result => result.url),
-        similarity_scores: topResults.map(result => ({
-          url: result.url,
-          score: result.score
-        }))
-      });
+    // 9) Invoke with a stable threadId
+    const threadId = body.threadId || uuidv4();
+    const result = await graph.invoke(
+      { messages: [new HumanMessage(msg)] },
+      { configurable: { thread_id: threadId } }
+    );
+    const assistantMsg = result.messages.at(-1)!.content;
 
-    if (insertError) {
-      console.error('Error storing chat data:', insertError);
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      results: similarityResults, 
-      response: responseText 
+    // 10) Persist the final turn
+    await supabase.from("chat_data").insert({
+      user_query: msg,
+      bot_response: assistantMsg,
+      context_urls: sims.map((s) => s.url),
+      similarity_scores: sims.map((s) => ({ url: s.url, score: s.score })),
+      thread_id: threadId,
     });
-  } catch (error) {
-    console.error("Error processing chat request:", error);
+
+    return NextResponse.json({
+      success: true,
+      response: assistantMsg,
+      threadId,
+    });
+  } catch (err) {
+    console.error("POST error:", err);
     return NextResponse.json(
-      { success: false, message: "Error processing request" },
+      { success: false, message: "Failed to process chat" },
       { status: 500 }
     );
   }
