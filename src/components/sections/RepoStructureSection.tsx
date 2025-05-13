@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { useAuth } from '@/lib/AuthContext'
 import { formatCodeSummary } from "../../utils/jsonToMarkdown"
+import { Components } from "react-markdown"
 
 // Dynamically import the force-graph component with A-Frame
 const ForceGraph3D = dynamic(() => {
@@ -314,7 +315,22 @@ export default function RepoStructureSection() {
                           ),
                           strong: ({children, ...props}) => (
                             <strong className="font-bold" {...props}>{children}</strong>
-                          )
+                          ),
+                          code: (props) => {
+                            const {children, className} = props;
+                            // Check if this has language- class which indicates a code block
+                            const isCodeBlock = className?.includes('language-');
+                            
+                            if (!isCodeBlock) {
+                              return <code className="px-1 py-0.5 bg-gray-100 rounded text-gray-800 font-mono text-sm">{children}</code>;
+                            }
+                            
+                            return (
+                              <div className="bg-gray-100 rounded-md p-3 my-2 overflow-auto">
+                                <code className="text-gray-800 font-mono text-sm block">{children}</code>
+                              </div>
+                            );
+                          }
                         }}
                       >
                         {msg.text}
