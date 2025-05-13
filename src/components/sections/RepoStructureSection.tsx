@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import dynamic from "next/dynamic"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, Send, X } from 'lucide-react'
+import { Loader2, Send, X, Copy } from 'lucide-react'
 import axios from "axios"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -317,16 +317,29 @@ export default function RepoStructureSection() {
                             <strong className="font-bold" {...props}>{children}</strong>
                           ),
                           code: (props) => {
-                            const {children, className} = props;
-                            // Check if this has language- class which indicates a code block
+                            const { children, className } = props;
                             const isCodeBlock = className?.includes('language-');
-                            
+
+                            const handleCopy = () => {
+                              navigator.clipboard.writeText(children as string).then(() => {
+                              }).catch(err => {
+                                console.error("Failed to copy: ", err);
+                              });
+                            };
+
                             if (!isCodeBlock) {
                               return <code className="px-1 py-0.5 bg-gray-100 rounded text-gray-800 font-mono text-sm">{children}</code>;
                             }
-                            
+
                             return (
-                              <div className="bg-gray-100 rounded-md p-3 my-2 overflow-auto">
+                              <div className="relative bg-gray-100 rounded-md p-3 my-2 overflow-auto">
+                                <button 
+                                  onClick={handleCopy} 
+                                  className="absolute top-2 right-2 p-1 bg-white rounded shadow hover:bg-gray-200"
+                                  aria-label="Copy code"
+                                >
+                                  <Copy className="h-4 w-4 text-gray-800" />
+                                </button>
                                 <code className="text-gray-800 font-mono text-sm block">{children}</code>
                               </div>
                             );
