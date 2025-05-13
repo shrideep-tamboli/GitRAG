@@ -10,7 +10,6 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { useAuth } from '@/lib/AuthContext'
 import { formatCodeSummary } from "../../utils/jsonToMarkdown"
-import { Components } from "react-markdown"
 import { Highlight, themes } from 'prism-react-renderer'
 
 // Dynamically import the force-graph component with A-Frame
