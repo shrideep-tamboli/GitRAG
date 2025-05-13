@@ -11,6 +11,7 @@ import remarkGfm from "remark-gfm"
 import { useAuth } from '@/lib/AuthContext'
 import { formatCodeSummary } from "../../utils/jsonToMarkdown"
 import { Components } from "react-markdown"
+import { Highlight, themes } from 'prism-react-renderer'
 
 // Dynamically import the force-graph component with A-Frame
 const ForceGraph3D = dynamic(() => {
@@ -319,6 +320,7 @@ export default function RepoStructureSection() {
                           code: (props) => {
                             const { children, className } = props;
                             const isCodeBlock = className?.includes('language-');
+                            const language = className?.replace('language-', '') || 'typescript';
 
                             const handleCopy = () => {
                               navigator.clipboard.writeText(children as string).then(() => {
@@ -340,7 +342,23 @@ export default function RepoStructureSection() {
                                 >
                                   <Copy className="h-4 w-4 text-gray-800" />
                                 </button>
-                                <code className="text-gray-800 font-mono text-sm block">{children}</code>
+                                <Highlight
+                                  theme={themes.vsLight}
+                                  code={children as string}
+                                  language={language}
+                                >
+                                  {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                                    <pre className={className} style={{ ...style, background: 'transparent', margin: 0, padding: 0 }}>
+                                      {tokens.map((line, i) => (
+                                        <div key={i} {...getLineProps({ line })}>
+                                          {line.map((token, key) => (
+                                            <span key={key} {...getTokenProps({ token })} />
+                                          ))}
+                                        </div>
+                                      ))}
+                                    </pre>
+                                  )}
+                                </Highlight>
                               </div>
                             );
                           }
