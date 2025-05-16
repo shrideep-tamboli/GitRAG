@@ -232,6 +232,15 @@ export default function RepoStructureSection() {
         { sender: "bot", text: data.response },
         ...prev,
       ]);
+
+      console.log("Total nodes:", graphData.nodes.length);
+      console.log("Nodes with embeddings:", graphData.nodes.filter(node => node.summaryEmbedding).length);
+      console.log("Sample of nodes with embeddings:", 
+        graphData.nodes
+          .filter(node => node.summaryEmbedding)
+          .slice(0, 5)
+          .map(node => node.url)
+      );
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -329,7 +338,7 @@ export default function RepoStructureSection() {
                             };
 
                             if (!isCodeBlock) {
-                              return <code className="px-1 py-0.5 bg-gray-100 rounded text-gray-800 font-mono text-sm">{children}</code>;
+                              return <code className="px-1 py-0.5 bg-gray-100 rounded text-sm">{children}</code>;
                             }
 
                             return (
@@ -508,29 +517,52 @@ export default function RepoStructureSection() {
                     </TabsList>
 
                     <TabsContent value="codeSummary" className="mt-4">
-                      <div className="custom-scrollbar h-[600px]">
-                        <div className="p-6 bg-white rounded-md border-2 border-gray-800/20">
+                      <div className="custom-scrollbar h-[600px]" style={{ overflowY: 'auto' }}>
+                        <div className="p-6 bg-white rounded-md border-2 border-gray-800/20" style={{ 
+                          width: '100%',
+                          maxWidth: '100%'
+                        }}>
                           {selectedNode?.codeSummary ? (
-                            <div className="prose prose-sm max-w-none">
+                            <div className="prose prose-sm" style={{ 
+                              maxWidth: '100%',
+                              width: '100%'
+                            }}>
                               {typeof selectedNode.codeSummary === "string" ? (
                                 <ReactMarkdown 
                                   className="prose max-w-none text-gray-800" 
                                   remarkPlugins={[remarkGfm]}
                                   components={{
-                                    h1: ({children, ...props}) => (
-                                      <h1 className="text-xl font-bold mt-4 mb-2 text-gray-800" {...props}>{children}</h1>
-                                    ),
-                                    h2: ({children, ...props}) => (
-                                      <h2 className="text-lg font-semibold mt-3 mb-2 text-gray-800" {...props}>{children}</h2>
-                                    ),
-                                    h3: ({children, ...props}) => (
-                                      <h3 className="text-base font-medium mt-2 mb-1 text-gray-800" {...props}>{children}</h3>
+                                    code: ({children, ...props}) => (
+                                      <code className="text-gray-600" style={{
+                                        display: 'block',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        width: '100%',
+                                        maxWidth: '100%',
+                                        overflow: 'visible'
+                                      }} {...props}>{children}</code>
                                     ),
                                     p: ({children, ...props}) => (
-                                      <p className="text-gray-600 mb-2" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} {...props}>{children}</p>
+                                      <p className="text-gray-600 mb-2" style={{
+                                        display: 'block',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        width: '100%',
+                                        maxWidth: '100%',
+                                        overflow: 'visible'
+                                      }} {...props}>{children}</p>
+                                    ),
+                                    h1: ({children, ...props}) => (
+                                      <h1 className="text-xl font-bold mt-4 mb-2" {...props}>{children}</h1>
+                                    ),
+                                    h2: ({children, ...props}) => (
+                                      <h2 className="text-lg font-semibold mt-3 mb-2" {...props}>{children}</h2>
+                                    ),
+                                    h3: ({children, ...props}) => (
+                                      <h3 className="text-base font-medium mt-2 mb-1" {...props}>{children}</h3>
                                     ),
                                     ul: ({children, ...props}) => (
-                                      <ul className="list-disc pl-4 mb-2 text-gray-600" {...props}>{children}</ul>
+                                      <ul className="list-disc pl-4 mb-2" {...props}>{children}</ul>
                                     ),
                                     li: ({children, ...props}) => (
                                       <li className="mb-1" {...props}>{children}</li>
@@ -596,9 +628,16 @@ export default function RepoStructureSection() {
                           <Loader2 className="h-6 w-6 animate-spin text-[#f8b878]" />
                         </div>
                       ) : (
-                        <div className="custom-scrollbar h-[600px]">
-                          <pre className="bg-white p-4 rounded-md border-2 border-gray-800/20" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                            <code className="text-gray-800">{fileContent}</code>
+                        <div className="custom-scrollbar h-[600px]" style={{ overflowY: 'auto', overflowX: 'auto' }}>
+                          <pre className="bg-white p-4 rounded-md border-2 border-gray-800/20" style={{ maxWidth: '100%' }}>
+                            <code className="text-gray-600 font-normal" style={{ 
+                              wordBreak: 'break-word', 
+                              whiteSpace: 'pre-wrap', 
+                              fontFamily: 'inherit',
+                              fontSize: 'inherit',
+                              lineHeight: '1.5',
+                              display: 'block',
+                            }}>{fileContent}</code>
                           </pre>
                         </div>
                       )}

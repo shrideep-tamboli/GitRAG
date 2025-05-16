@@ -105,19 +105,33 @@ export async function POST(request: Request) {
     // 1) Embed the user query
     const queryEmbedding = await generateEmbeddings(msg);
 
-    // 2) Compute top-3 similar summaries
+    // 2) Compute similarity scores for all summaries
+    console.log("Received summaries count:", summaries.length);
+    console.log("Summaries with embeddings count:", summaries.filter(s => s.summaryEmbedding).length);
+
     const sims = summaries
       .filter((s) => s.summaryEmbedding)
-      .map((s) => ({
-        ...s,
-        score: cosineSimilarity(queryEmbedding, s.summaryEmbedding!),
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+      .map((s) => {
+        const score = cosineSimilarity(queryEmbedding, s.summaryEmbedding!);
+        console.log(`URL: ${s.url}, Score: ${score}`);
+        return {
+          ...s,
+          score,
+        };
+      });
+
+    // Sort the results in descending order based on the score
+    sims.sort((a, b) => b.score - a.score);
+
+    // Select the top 3 highest scoring summaries
+    const top3Sims = sims.slice(0, 3);
+
+    // Log the top 3 highest scoring URLs
+    console.log("Top 3 Retrieved Code Files:", top3Sims.map(s => s.url), top3Sims.map(s => ({ url: s.url, score: s.score })));
 
     // 3) Fetch file contents and build context
     const structured = await Promise.all(
-      sims.map(async (s) => ({
+      top3Sims.map(async (s) => ({
         filePath: s.url.includes("/contents/")
           ? s.url.split("/contents/")[1]
           : s.url.split("/main/")[1] || s.url,
@@ -126,7 +140,7 @@ export async function POST(request: Request) {
       }))
     );
 
-    // 4) Escape all braces in the JSON context so LangChain’s template parser won’t choke
+    // 4) Escape all braces in the JSON context so LangChain's template parser won't choke
     const contextStr = JSON.stringify(structured, null, 2)
       .replace(/[{]/g, "{{")
       .replace(/[}]/g, "}}");
@@ -183,8 +197,8 @@ export async function POST(request: Request) {
     await supabase.from("chat_data").insert({
       user_query: msg,
       bot_response: assistantMsg,
-      context_urls: sims.map((s) => s.url),
-      similarity_scores: sims.map((s) => ({ url: s.url, score: s.score })),
+      context_urls: top3Sims.map((s) => s.url),
+      similarity_scores: top3Sims.map((s) => ({ url: s.url, score: s.score })),
       thread_id: threadId,
     });
 

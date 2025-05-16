@@ -55,7 +55,7 @@ function countTokens(text: string): number {
 // Function to get code summary using Google's Gemini model.
 // Replaced "any" with the proper CodeSummaryMetadata type.
 // Note the metadata is now coerced to null if undefined.
-async function getCodeSummary(code: string): Promise<{
+async function getCodeSummary(code: string, fileUrl: string): Promise<{
   summary: string;
   metadata: CodeSummaryMetadata | null;
   current_input_token: number;
@@ -63,29 +63,10 @@ async function getCodeSummary(code: string): Promise<{
   try {
     await delay(1000); // Keep the delay to avoid rate limits
 
-/*
-    const system_prompt = `Analyze the provided code and return a detailed summary in a valid JSON format. Your response should include (but is not limited to) the following keys:
-                {
-                  "overall_summary": "A comprehensive explanation of what the code does, its purpose, and high-level functionality.",
-                  "functions": "A list of all the functions defined in the code along with a brief description of each function's purpose, parameters, and return values (if identifiable).",
-                  "classes": "If applicable, a list of classes defined in the code, along with their key methods and attributes.",
-                  "variables": "Important global or significant variables used in the code, including constants.",
-                  "dependencies": {
-                    "external_libraries": "Any external libraries, frameworks, or modules imported and used in the code.",
-                    "file_dependencies": "Any other files or modules (both frontend and backend) that the code depends on for data (e.g., files from which data is sent or received, API endpoints, etc.)."
-                  },
-                  "requests": "Identify and list all HTTP requests (GET, POST, PUT, DELETE, etc.) made in the code along with their endpoints and a brief description of their purpose.",
-                  "file_system_operations": "Any file system operations performed (reading/writing files, accessing directories, etc.).",
-                  "additional_notes": "Any other relevant details or observations that may help in understanding the code (such as design patterns, error handling, comments, etc.)."
-                }
-
-                Please ensure that the output is valid JSON and use the keys above as a guideline. Do not include any extra keys or text outside the JSON structure.
-
-                Here is the code to analyze: ${code}`;
-*/
-
-    const system_prompt = `Generate concise comments for the following code describing the purpose of the code and the logic behind it. STRICTLY DO NOT include code syntaxes. 
-    Here is the code: ${code}`
+    const system_prompt = `Generate concise comments for the following code describing the purpose of the code and the logic behind it. 
+    Always include the first line as the File URL: ${fileUrl}\n
+    STRICTLY DO NOT include code syntaxes. 
+    Here is the code: ${code}`;
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -238,7 +219,7 @@ const fetchRepositoryContents = async (
           const codeContent = await fetchCodeContent(item.download_url);
           if (codeContent) {
             console.log(`Processing file: ${item.name}`);
-            const { summary, metadata, current_input_token } = await getCodeSummary(codeContent);
+            const { summary, metadata, current_input_token } = await getCodeSummary(codeContent, item.download_url);
             console.log(`Token usage for ${item.name}:`, metadata);
             // Update the running total using the same token count method.
             runningInputTokenSum.sum += current_input_token;
