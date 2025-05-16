@@ -14,7 +14,7 @@ interface CodeSummaryMetadata {
 // Configuration
 const API_CONFIG = {
   CONCURRENT_REQUESTS: 3,
-  RATE_LIMIT_RPM: 15,
+  RATE_LIMIT_RPM: 30,
   BACKOFF_DELAY: 10,
   MAX_RETRIES: 3,
 };
@@ -60,14 +60,14 @@ async function rateLimit() {
 }
 
 // Retry with exponential backoff
-const retryWithBackoff = async <T>(fn: () => Promise<T>, maxRetries = API_CONFIG.MAX_RETRIES): Promise<T> => {
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = API_CONFIG.MAX_RETRIES): Promise<T> {
   let retries = 0;
   while (true) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: unknown) {
       retries++;
-      if (retries >= maxRetries || (!error.toString().includes("429") && !error.toString().includes("rate limit"))) {
+      if (retries >= maxRetries || (!isRateLimitError(error))) {
         throw error;
       }
       const backoffTime = API_CONFIG.BACKOFF_DELAY * Math.pow(2, retries) * (0.5 + Math.random());
@@ -75,7 +75,14 @@ const retryWithBackoff = async <T>(fn: () => Promise<T>, maxRetries = API_CONFIG
       await delay(backoffTime);
     }
   }
-};
+}
+
+function isRateLimitError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return error.message.includes("429") || error.message.includes("rate limit");
+  }
+  return false;
+}
 
 // Token counting using tiktoken
 function countTokens(text: string): number {
@@ -103,7 +110,7 @@ Here is the code: ${code}`;
 
     const response = await retryWithBackoff(() =>
       ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.0-flash-lite",
         contents: system_prompt,
       })
     );
@@ -119,13 +126,22 @@ Here is the code: ${code}`;
     };
 
     return { summary: responseText, metadata, current_input_token };
-  } catch (error) {
-    console.error("Error in getCodeSummary:", error);
-    return {
-      summary: "Failed to generate summary",
-      metadata: null,
-      current_input_token: 0,
-    };
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("Error in getCodeSummary:", error.message);
+      return {
+        summary: "Failed to generate summary",
+        metadata: null,
+        current_input_token: 0,
+      };
+    } else {
+      console.error("Unexpected error:", error);
+      return {
+        summary: "Failed to generate summary",
+        metadata: null,
+        current_input_token: 0,
+      };
+    }
   }
 }
 
