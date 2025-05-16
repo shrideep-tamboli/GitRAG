@@ -94,6 +94,8 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
     setContents([])
     setStatusMessage(`Connecting to ${url}...`)
 
+    const startTime = performance.now() // Start time
+
     try {
       const response = await fetch("/api/connect-repo", {
         method: "POST",
@@ -105,6 +107,10 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
           userId: user?.id,
         }),
       })
+
+      const endTime = performance.now() // End time
+      const duration = endTime - startTime // Calculate duration
+      console.log(`Request to /api/connect-repo took ${duration.toFixed(2)} ms`)
 
       const data = await response.json()
 
