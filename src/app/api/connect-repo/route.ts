@@ -148,7 +148,7 @@ Here is the code: ${code}`;
 // Fetch raw code from GitHub
 async function fetchCodeContent(url: string): Promise<string> {
   try {
-    const response = await axios.get(url, { timeout: 1000 });
+    const response = await axios.get(url, { timeout: 5000 });
     return response.data;
   } catch (error) {
     console.warn("Error fetching code:", error);
