@@ -144,6 +144,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
         setVectorizeMessage("")
         setStatusMessage(`Vectorizing ${url}...`)
         try {
+          const startTime = performance.now() // Start time for vectorize request
           const vectorizeRes = await fetch("/api/vectorize", {
             method: "POST",
             headers: {
@@ -151,6 +152,10 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
             },
             body: JSON.stringify({ userId: user?.id }),
           })
+          const endTime = performance.now() // End time for vectorize request
+          const duration = endTime - startTime // Calculate duration
+          console.log(`Request to /api/vectorize took ${duration.toFixed(2)} ms`)
+
           const vectorizeData = await vectorizeRes.json()
           setVectorizeMessage(vectorizeData.message || "Vectorization complete!")
           setStatusMessage(`${getRepoNameFromUrl(url)} is ready to use`)

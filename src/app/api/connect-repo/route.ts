@@ -20,7 +20,7 @@ const API_CONFIG = {
 };
 
 // Blacklist filters
-const blacklistedKeywords = ["LICENSE", "git", "docker", "Makefile", "config", "package", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"];
+const blacklistedKeywords = ["LICENSE", "git", "docker", "Makefile", "config", "package", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp",".sqlite",".zip"];
 const blacklistedDirKeywords = [".git", ".github", "docs", "tests", "example", "images", "docker", "sdks", "dev", "events", "extensions", "deployment", "public", "venv", ".ico"];
 
 const isBlacklisted = (itemName: string, itemPath: string): boolean => {

@@ -2,124 +2,178 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import neo4j from "neo4j-driver";
+import pLimit from "p-limit";
 
-// Define proper types for Google AI embedding responses
-interface EmbeddingValue {
-  values: number[];
+// Configuration
+const API_CONFIG = {
+  CONCURRENT_REQUESTS: 3,
+  RATE_LIMIT_RPM: 120,    // adjust to your quota
+  BACKOFF_DELAY: 10,
+  MAX_RETRIES: 3,
+};
+
+// Sliding-window rate limiter state
+const requestTimestamps: number[] = [];
+const WINDOW_SIZE_MS = 60 * 1000;
+function cleanOldTimestamps() {
+  const now = Date.now();
+  while (requestTimestamps.length && now - requestTimestamps[0] > WINDOW_SIZE_MS) {
+    requestTimestamps.shift();
+  }
+}
+async function rateLimit() {
+  cleanOldTimestamps();
+  if (requestTimestamps.length >= API_CONFIG.RATE_LIMIT_RPM) {
+    const waitTime = WINDOW_SIZE_MS - (Date.now() - requestTimestamps[0]);
+    console.log(`⏳ Rate limit hit, waiting ${waitTime}ms`);
+    await new Promise((r) => setTimeout(r, waitTime));
+    cleanOldTimestamps();
+  }
+  requestTimestamps.push(Date.now());
 }
 
-interface EmbeddingResponse {
-  embeddings: EmbeddingValue[];
+// Exponential backoff on 429s
+async function retryWithBackoff<T>(fn: () => Promise<T>): Promise<T> {
+  let tries = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      tries++;
+      const isRateError =
+        (err as Error).toString().includes("429") ||
+        (err as Error).toString().toLowerCase().includes("rate limit");
+      if (tries > API_CONFIG.MAX_RETRIES || !isRateError) throw err;
+      const backoff = API_CONFIG.BACKOFF_DELAY * 2 ** tries * (0.5 + Math.random());
+      console.warn(`⚠️ Retry ${tries} in ${Math.round(backoff)}ms due to rate error`);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
 }
 
-// Initialize GenAI client (public Gemini API)
+// GenAI client
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY!,
   vertexai: false,
 });
 
-// Connect to Neo4j
+// Neo4j driver
 const driver = neo4j.driver(
-  process.env.NEO4J_URI || "bolt://localhost:7687",
+  process.env.NEO4J_URI ?? "bolt://localhost:7687",
   neo4j.auth.basic(
-    process.env.NEO4J_USER || "neo4j",
-    process.env.NEO4J_PASSWORD || "password"
+    process.env.NEO4J_USER ?? "neo4j",
+    process.env.NEO4J_PASSWORD ?? "password"
   )
 );
 
-async function generateEmbeddings(text: string): Promise<number[]> {
-  const payloadSize = Buffer.byteLength(text, 'utf8');
-  console.log(`Generating embeddings: payload size = ${payloadSize} bytes`);
-  try {
-    const response = await ai.models.embedContent({
-      model: 'text-embedding-004',
-      contents: text,
-    });
+interface EmbeddingValue { values: number[]; }
+interface EmbeddingResponse { embeddings: EmbeddingValue[]; }
 
-    const typed = response as EmbeddingResponse;
-    if (!Array.isArray(typed.embeddings) || typed.embeddings.length === 0) {
-      throw new Error('Invalid embedding response: embeddings array missing');
-    }
-    const values = typed.embeddings[0].values;
-    if (!Array.isArray(values)) {
-      throw new Error('Invalid embedding response: values not found');
-    }
-    return values;
-  } catch (err: unknown) {
-    console.error(`Error generating embeddings for payload (size ${payloadSize} bytes):`, err);
-    throw err;
-  }
+interface FileNode {
+  properties: {
+    url: string;
+    codeSummary?: string;
+  };
+}
+
+async function generateEmbedding(text: string): Promise<number[]> {
+  await rateLimit();
+  const resp = await retryWithBackoff(() =>
+    ai.models.embedContent({ model: "text-embedding-004", contents: text })
+  ) as EmbeddingResponse;
+  const vals = resp.embeddings?.[0]?.values;
+  if (!Array.isArray(vals)) throw new Error("Invalid embedding response");
+  return vals;
 }
 
 export async function POST(req: Request) {
-  const session = driver.session();
-  const { userId } = await req.json();
-
   try {
-    const result = await session.run(
-      "MATCH (n {userId: $userId}) RETURN n",
+    const { userId } = await req.json();
+
+    // 1) Read all file nodes in one session
+    const readSession = driver.session();
+    const result = await readSession.run(
+      "MATCH (n {userId: $userId}) WHERE n.type='File_Url' RETURN n",
       { userId }
     );
+    await readSession.close();
 
-    for (const record of result.records) {
-      const node = record.get('n');
-      if (node.properties.type !== 'File_Url' || !node.properties.url) {
-        console.warn(`Skipping node id=${node.identity.toString()}: type=${node.properties.type}, url=${node.properties.url}`);
-        continue;
-      }
+    const fileNodes = result.records
+      .map(r => r.get("n") as FileNode)
+      .filter((n: FileNode) => !!n.properties.url);
 
-      const fileUrl: string = node.properties.url;
-      console.log(`Processing node id=${node.identity.toString()} url=${fileUrl}`);
+    console.log(`🔍 Found ${fileNodes.length} files to vectorize`);
 
-      let fileContent = '';
-      try {
-        const res = await fetch(fileUrl);
-        if (res.ok) {
-          fileContent = await res.text();
-        } else {
-          console.warn(`Failed to fetch content from ${fileUrl}: status ${res.status}`);
-          continue;
-        }
-      } catch (fetchErr: unknown) {
-        console.warn(`Error fetching file from ${fileUrl}:`, fetchErr);
-        continue;
-      }
+    // 2) Process in parallel, but each write uses its own session
+    const limit = pLimit(API_CONFIG.CONCURRENT_REQUESTS);
+    await Promise.allSettled(
+      fileNodes.map((node: FileNode) =>
+        limit(async () => {
+          const url: string = node.properties.url;
+          console.log(`➡️ Fetching ${url}`);
+          let content = "";
+          try {
+            const res = await fetch(url);
+            if (!res.ok) {
+              console.warn(`Fetch failed (${res.status}): ${url}`);
+              return;
+            }
+            content = await res.text();
+          } catch (e) {
+            console.warn(`Fetch error for ${url}:`, e);
+            return;
+          }
 
-      // If content too large, skip or truncate
-      const maxBytes = 4 * 1024 * 1024; // 4MB limit
-      const contentSize = Buffer.byteLength(fileContent, 'utf8');
-      if (contentSize > maxBytes) {
-        console.error(`Skipping ${fileUrl}: content size ${contentSize} bytes exceeds limit ${maxBytes} bytes`);
-        continue;
-      }
+          // 3) Skip oversized content
+          const maxBytes = 4 * 1024 * 1024;
+          if (Buffer.byteLength(content, "utf8") > maxBytes) {
+            console.warn(`Skipping ${url}: >4MB`);
+            return;
+          }
 
-      try {
-        const contentEmbedding = await generateEmbeddings(fileContent);
-        const codeSummaryText = node.properties.codeSummary || '';
-        const summaryEmbedding = await generateEmbeddings(codeSummaryText);
+          try {
+            console.log(`🎯 Embedding content for ${url}`);
+            const contentEmbedding = await generateEmbedding(content);
 
-        await session.run(
-          `
-          MATCH (n)
-          WHERE n.url = $url
-          SET n.contentEmbedding = $contentEmbedding, n.summaryEmbedding = $summaryEmbedding
-          RETURN n
-          `,
-          { url: fileUrl, contentEmbedding, summaryEmbedding }
-        );
-        console.log(`Embeddings stored for ${fileUrl}`);
-      } catch (embedErr: unknown) {
-        console.error(`Error vectorizing ${fileUrl}:`, embedErr);
-        // continue with next node
-      }
-    }
+            const summary = node.properties.codeSummary || "";
+            console.log(`🎯 Embedding summary for ${url}`);
+            const summaryEmbedding = summary.trim()
+              ? await generateEmbedding(summary)
+              : [];
 
-    return NextResponse.json({ message: 'Graph vectorized successfully' }, { status: 200 });
-  } catch (error: unknown) {
-    console.error('Error during vectorization process:', error);
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: 'Error vectorizing graph', details: msg }, { status: 500 });
-  } finally {
-    await session.close();
+            // 4) Write embeddings in a fresh session
+            const writeSession = driver.session();
+            try {
+              await writeSession.run(
+                `
+                MATCH (n) WHERE n.url = $url
+                SET n.contentEmbedding = $contentEmbedding,
+                    n.summaryEmbedding = $summaryEmbedding
+                `,
+                { url, contentEmbedding, summaryEmbedding }
+              );
+              console.log(`✅ Stored embeddings for ${url}`);
+            } finally {
+              await writeSession.close();
+            }
+
+          } catch (embedErr) {
+            console.error(`❌ Embedding error for ${url}:`, embedErr);
+          }
+        })
+      )
+    );
+
+    return NextResponse.json(
+      { message: "Graph vectorized successfully" },
+      { status: 200 }
+    );
+
+  } catch (err: unknown) {
+    console.error("❌ Vectorization error:", err);
+    return NextResponse.json(
+      { error: "Error vectorizing graph", details: (err as Error).message },
+      { status: 500 }
+    );
   }
 }
