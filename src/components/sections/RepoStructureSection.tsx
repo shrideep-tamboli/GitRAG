@@ -45,15 +45,19 @@ interface GraphData {
   links: Link[]
 }
 
+interface SourceFile {
+  url: string
+  score: number
+  codeSummary?: string
+  summaryEmbedding?: number[] | null
+}
+
 interface ChatMessage {
   sender: "user" | "bot"
   text: string
   id?: string
   isRetrieving?: boolean
-  sourceFiles?: Array<{
-    url: string
-    score: number
-  }>
+  sourceFiles?: SourceFile[]
 }
 
 export default function RepoStructureSection() {
@@ -264,9 +268,11 @@ export default function RepoStructureSection() {
           newMessages[retrievalIndex] = {
             ...newMessages[retrievalIndex],
             text: "🔍 Found relevant code files. Generating response...",
-            sourceFiles: sources.map((s: any) => ({
+            sourceFiles: sources.map((s: SourceFile) => ({
               url: s.url,
-              score: s.score
+              score: s.score,
+              codeSummary: s.codeSummary,
+              summaryEmbedding: s.summaryEmbedding
             }))
           };
         }
@@ -294,9 +300,11 @@ export default function RepoStructureSection() {
           {
             sender: "bot",
             text: chatResponse.data.response,
-            sourceFiles: sources.map((s: any) => ({
+            sourceFiles: sources.map((s: SourceFile) => ({
               url: s.url,
-              score: s.score
+              score: s.score,
+              codeSummary: s.codeSummary,
+              summaryEmbedding: s.summaryEmbedding
             }))
           },
           ...newMessages
@@ -417,7 +425,7 @@ export default function RepoStructureSection() {
                                   }
 
                                   return (
-                                    <div className="relative bg-gray-100 rounded-md p-3 my-2 overflow-auto">
+                                    <div className="relative bg-gray-100 rounded-md p-4 overflow-auto">
                                       <button 
                                         onClick={handleCopy} 
                                         className="absolute top-2 right-2 p-1 bg-white rounded shadow hover:bg-gray-200"
