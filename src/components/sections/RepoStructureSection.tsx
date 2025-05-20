@@ -48,6 +48,12 @@ interface GraphData {
 interface ChatMessage {
   sender: "user" | "bot"
   text: string
+  id?: string
+  isRetrieving?: boolean
+  sourceFiles?: Array<{
+    url: string
+    score: number
+  }>
 }
 
 export default function RepoStructureSection() {
@@ -60,6 +66,21 @@ export default function RepoStructureSection() {
   const [isSideCanvasOpen, setIsSideCanvasOpen] = useState(false)
   const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [chatInput, setChatInput] = useState("")
+  const chatInputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-grow textarea up to 15 rows
+  const handleChatInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setChatInput(e.target.value);
+    const textarea = chatInputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const maxRows = 8;
+      const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight || '20', 10);
+      const maxHeight = maxRows * lineHeight;
+      textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+    }
+  };
+
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isTyping, setIsTyping] = useState(false)
   const messagesStartRef = useRef<HTMLDivElement>(null)
@@ -203,12 +224,8 @@ export default function RepoStructureSection() {
   const handleSend = async () => {
     if (!chatInput.trim()) return;
 
-    // Define a more specific type for the payload
-    const payload: {
-      message: string;
-      summaries: { codeSummary: string; summaryEmbedding: number[] | null; url: string }[];
-      threadId?: string;
-    } = {
+    // Prepare the payload for retrieving relevant sources
+    const retrievePayload = {
       message: chatInput,
       summaries: graphData.nodes.map((node) => ({
         codeSummary: node.codeSummary || "",
@@ -216,36 +233,86 @@ export default function RepoStructureSection() {
         url: node.id,
       })),
     };
-    if (threadId) payload.threadId = threadId;
   
-    setMessages((prev) => [{ sender: "user", text: chatInput }, ...prev]);
+    // Add user message to chat
+    const userMessage: ChatMessage = { sender: "user", text: chatInput };
+    setMessages(prev => [userMessage, ...prev]);
     setChatInput("");
-    setIsTyping(true);
-  
+    
+    // Show loading state for retrieval
+    const retrievalId = Date.now().toString();
+    setMessages(prev => [
+      { 
+        sender: "bot", 
+        text: "🔍 Retrieving relevant code files...",
+        isRetrieving: true,
+        id: retrievalId
+      },
+      ...prev
+    ]);
+    
     try {
-      const { data } = await axios.post("/api/chat", payload);
-      // save the threadId returned by the server
-      if (data.threadId) setThreadId(data.threadId);
-  
-      // add bot reply
-      setMessages((prev) => [
-        { sender: "bot", text: data.response },
-        ...prev,
-      ]);
-
-      console.log("Total nodes:", graphData.nodes.length);
-      console.log("Nodes with embeddings:", graphData.nodes.filter(node => node.summaryEmbedding).length);
-      console.log("Sample of nodes with embeddings:", 
-        graphData.nodes
-          .filter(node => node.summaryEmbedding)
-          .slice(0, 5)
-          .map(node => node.url)
-      );
+      // Step 1: Retrieve relevant sources
+      const retrieveResponse = await axios.post("/api/retrieve", retrievePayload);
+      const { sources } = retrieveResponse.data;
+      
+      // Update the retrieval message with the found sources
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const retrievalIndex = newMessages.findIndex(m => m.id === retrievalId);
+        if (retrievalIndex !== -1) {
+          newMessages[retrievalIndex] = {
+            ...newMessages[retrievalIndex],
+            text: "🔍 Found relevant code files. Generating response...",
+            sourceFiles: sources.map((s: any) => ({
+              url: s.url,
+              score: s.score
+            }))
+          };
+        }
+        return newMessages;
+      });
+      
+      // Step 2: Get LLM response with the retrieved sources
+      const chatPayload = {
+        message: chatInput,
+        sources: sources,
+        threadId: threadId
+      };
+      
+      const chatResponse = await axios.post("/api/chat", chatPayload);
+      
+      // Save the threadId if returned
+      if (chatResponse.data.threadId) {
+        setThreadId(chatResponse.data.threadId);
+      }
+      
+      // Replace the retrieval message with the final response
+      setMessages(prev => {
+        const newMessages = prev.filter(m => m.id !== retrievalId);
+        return [
+          {
+            sender: "bot",
+            text: chatResponse.data.response,
+            sourceFiles: sources.map((s: any) => ({
+              url: s.url,
+              score: s.score
+            }))
+          },
+          ...newMessages
+        ];
+      });
+      
+      console.log("Chat completed with sources:", sources);
+      
     } catch (err) {
-      console.error(err);
-      setMessages((prev) => [
-        { sender: "bot", text: "Error: Failed to get response." },
-        ...prev,
+      console.error("Error in chat flow:", err);
+      setMessages(prev => [
+        { 
+          sender: "bot", 
+          text: "Error: Failed to process your request. Please try again." 
+        },
+        ...prev.filter(m => m.id !== retrievalId)
       ]);
     } finally {
       setIsTyping(false);
@@ -260,7 +327,7 @@ export default function RepoStructureSection() {
   return (
     <div className="flex flex-col min-h-screen bg-[#f9f9f7]">
       <div className="flex-1 container mx-auto p-8">
-
+      <div className="transform scale-90 origin-top-center">
         <div className="border-2 border-gray-800/20 rounded-lg mb-8 flex flex-col bg-[#fdf6e3]" style={{ maxHeight: "640px" }}>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col-reverse">
             {isTyping && (
@@ -300,80 +367,115 @@ export default function RepoStructureSection() {
                     }`}
                   >
                     {msg.sender === "bot" ? (
-                      <ReactMarkdown 
-                        className="prose max-w-none text-gray-800" 
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          h1: ({children, ...props}) => (
-                            <h1 className="text-xl font-bold mt-4 mb-2" {...props}>{children}</h1>
-                          ),
-                          h2: ({children, ...props}) => (
-                            <h2 className="text-lg font-semibold mt-3 mb-2" {...props}>{children}</h2>
-                          ),
-                          h3: ({children, ...props}) => (
-                            <h3 className="text-base font-medium mt-2 mb-1" {...props}>{children}</h3>
-                          ),
-                          p: ({children, ...props}) => (
-                            <p className="mb-2" {...props}>{children}</p>
-                          ),
-                          ul: ({children, ...props}) => (
-                            <ul className="list-disc pl-4 mb-2" {...props}>{children}</ul>
-                          ),
-                          li: ({children, ...props}) => (
-                            <li className="mb-1" {...props}>{children}</li>
-                          ),
-                          strong: ({children, ...props}) => (
-                            <strong className="font-bold" {...props}>{children}</strong>
-                          ),
-                          code: (props) => {
-                            const { children, className } = props;
-                            const isCodeBlock = className?.includes('language-');
-                            const language = className?.replace('language-', '') || 'typescript';
+                      <div className={msg.isRetrieving ? "opacity-70" : ""}>
+                        <div className="flex items-start">
+                          {msg.isRetrieving && (
+                            <div className="mr-2 mt-0.5">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <ReactMarkdown 
+                              className="prose max-w-none text-gray-800" 
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                h1: ({children, ...props}) => (
+                                  <h1 className="text-xl font-bold mt-4 mb-2" {...props}>{children}</h1>
+                                ),
+                                h2: ({children, ...props}) => (
+                                  <h2 className="text-lg font-semibold mt-3 mb-2" {...props}>{children}</h2>
+                                ),
+                                h3: ({children, ...props}) => (
+                                  <h3 className="text-base font-medium mt-2 mb-1" {...props}>{children}</h3>
+                                ),
+                                p: ({children, ...props}) => (
+                                  <p className="mb-2" {...props}>{children}</p>
+                                ),
+                                ul: ({children, ...props}) => (
+                                  <ul className="list-disc pl-4 mb-2" {...props}>{children}</ul>
+                                ),
+                                li: ({children, ...props}) => (
+                                  <li className="mb-1" {...props}>{children}</li>
+                                ),
+                                strong: ({children, ...props}) => (
+                                  <strong className="font-bold" {...props}>{children}</strong>
+                                ),
+                                code: (props) => {
+                                  const { children, className } = props;
+                                  const isCodeBlock = className?.includes('language-');
+                                  const language = className?.replace('language-', '') || 'typescript';
 
-                            const handleCopy = () => {
-                              navigator.clipboard.writeText(children as string).then(() => {
-                              }).catch(err => {
-                                console.error("Failed to copy: ", err);
-                              });
-                            };
+                                  const handleCopy = () => {
+                                    navigator.clipboard.writeText(children as string).then(() => {
+                                    }).catch(err => {
+                                      console.error("Failed to copy: ", err);
+                                    });
+                                  };
 
-                            if (!isCodeBlock) {
-                              return <code className="px-1 py-0.5 bg-gray-100 rounded text-sm">{children}</code>;
-                            }
+                                  if (!isCodeBlock) {
+                                    return <code className="px-1 py-0.5 bg-gray-100 rounded text-sm">{children}</code>;
+                                  }
 
-                            return (
-                              <div className="relative bg-gray-100 rounded-md p-3 my-2 overflow-auto">
-                                <button 
-                                  onClick={handleCopy} 
-                                  className="absolute top-2 right-2 p-1 bg-white rounded shadow hover:bg-gray-200"
-                                  aria-label="Copy code"
-                                >
-                                  <Copy className="h-4 w-4 text-gray-800" />
-                                </button>
-                                <Highlight
-                                  theme={themes.vsLight}
-                                  code={children as string}
-                                  language={language}
-                                >
-                                  {({ className, style, tokens, getLineProps, getTokenProps }) => (
-                                    <pre className={className} style={{ ...style, background: 'transparent', margin: 0, padding: 0 }}>
-                                      {tokens.map((line, i) => (
-                                        <div key={i} {...getLineProps({ line })}>
-                                          {line.map((token, key) => (
-                                            <span key={key} {...getTokenProps({ token })} />
-                                          ))}
-                                        </div>
-                                      ))}
-                                    </pre>
-                                  )}
-                                </Highlight>
+                                  return (
+                                    <div className="relative bg-gray-100 rounded-md p-3 my-2 overflow-auto">
+                                      <button 
+                                        onClick={handleCopy} 
+                                        className="absolute top-2 right-2 p-1 bg-white rounded shadow hover:bg-gray-200"
+                                        aria-label="Copy code"
+                                      >
+                                        <Copy className="h-4 w-4 text-gray-800" />
+                                      </button>
+                                      <Highlight
+                                        theme={themes.vsLight}
+                                        code={children as string}
+                                        language={language}
+                                      >
+                                        {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                                          <pre className={className} style={{ ...style, background: 'transparent', margin: 0, padding: 0 }}>
+                                            {tokens.map((line, i) => (
+                                              <div key={i} {...getLineProps({ line })}>
+                                                {line.map((token, key) => (
+                                                  <span key={key} {...getTokenProps({ token })} />
+                                                ))}
+                                              </div>
+                                            ))}
+                                          </pre>
+                                        )}
+                                      </Highlight>
+                                    </div>
+                                  );
+                                }
+                              }}
+                            >
+                              {msg.text}
+                            </ReactMarkdown>
+                            
+                            {msg.sourceFiles && msg.sourceFiles.length > 0 && (
+                              <div className="mt-2 text-xs text-gray-500">
+                                <div className="font-medium mb-1">Sources:</div>
+                                <div className="space-y-1">
+                                {msg.sourceFiles.map((file, idx) => {
+                                 // display path starting with repo name (dropping the username)
+                                 const parts = file.url.split('/');
+                                 // parts = ['https:', '', 'github.com', 'owner', 'repo', 'blob', 'main', '…']
+                                 const displayPath = parts.slice(4).join('/');  
+                                 return (
+                                   <div key={idx} className="flex items-center">
+                                     <span
+                                       className="font-medium mb-1 break-words whitespace-normal"
+                                       title={file.url}
+                                     >
+                                       {displayPath} ({(file.score * 100).toFixed(1)}%)
+                                     </span>
+                                   </div>
+                                 );
+                               })}
+                                </div>
                               </div>
-                            );
-                          }
-                        }}
-                      >
-                        {msg.text}
-                      </ReactMarkdown>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       msg.text
                     )}
@@ -385,29 +487,33 @@ export default function RepoStructureSection() {
             <div ref={messagesStartRef} />
           </div>
           <div className="p-2 border-t border-gray-800/20 flex items-center space-x-2">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleSend()
-                }
-              }}
-              placeholder="Enter message"
-              className="flex-1 p-2 border-2 border-gray-800/20 rounded-md outline-none focus:ring-2 focus:ring-[#f8b878] text-gray-800 bg-white"
-            />
-            <button
-              onClick={handleSend}
-              className="p-2 bg-[#f8b878] text-gray-800 rounded-md hover:bg-[#f6a55f] transition-colors"
-              aria-label="Send message"
-            >
-              <Send className="h-5 w-5" />
-            </button>
-          </div>
+          <textarea
+            ref={chatInputRef}
+            rows={1}
+            value={chatInput}
+            onChange={handleChatInputChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+            placeholder="Enter message"
+            style={{ minHeight: '2.5rem', maxHeight: '22.5rem', overflowY: 'auto' }}
+            className="flex-1 p-2 border-2 border-gray-800/20 rounded-md outline-none focus:ring-2 focus:ring-[#f8b878] text-gray-800 bg-white resize-none custom-chat-scrollbar"
+          />
+          <button
+            onClick={handleSend}
+            className="p-2 bg-[#f8b878] text-gray-800 rounded-md hover:bg-[#f6a55f] transition-colors"
+            aria-label="Send message"
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </div>
+        </div>
         </div>
 
-        <Card className="p-6 mb-8 border-2 border-gray-800/20 rounded-xl bg-[#fdf6e3] shadow-lg">
+        <Card className="p-6 mb-8 border-2 border-gray-800/20 rounded-xl bg-[#fdf6e3] shadow-lg w-[90%] mx-auto">
           <h1 className="text-3xl font-bold mb-2 text-gray-800">Repository Knowledge Graph</h1>
           <p className="text-gray-700">
             Explore your repository structure in 3D. Click on nodes to view details.
@@ -425,8 +531,8 @@ export default function RepoStructureSection() {
         {!loading && !error && (
           <div className="flex h-[800px]">
             <div
-              className={`bg-[#fdf6e3] rounded-lg shadow-xl overflow-hidden relative transition-all duration-300 ease-in-out border-2 border-gray-800/20 ${
-                isSideCanvasOpen ? "w-1/2" : "w-full"
+              className={`bg-[#fdf6e3] rounded-lg shadow-xl mx-auto overflow-hidden relative transition-all duration-300 ease-in-out border-2 border-gray-800/20 ${
+                isSideCanvasOpen ? "w-1/2" : "w-[90%]"
               }`}
               style={{
                 display: "flex",
@@ -652,18 +758,47 @@ export default function RepoStructureSection() {
 
       {/* Add custom scrollbar styles */}
       <style jsx global>{`
+        .custom-chat-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(155, 155, 155, 0.4) transparent;
+          border: transparent;
+        }
+        .custom-chat-scrollbar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .custom-chat-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+          border: transparent;
+        }
+        .custom-chat-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(155, 155, 155, 0.4);
+          border-radius: 20px;
+          border: transparent;
+        }
+        .custom-chat-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(155, 155, 155, 0.4);
+          border: transparent;
+        }
+        .custom-chat-scrollbar::-webkit-scrollbar-button {
+          height: 0;
+          display: none;
+          background: none;
+          border: transparent;
+        }
+
         .custom-scrollbar {
           overflow-y: auto;
           scrollbar-width: thin;
           scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+          border: transparent;
         }
-        
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
+          border: transparent;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -674,6 +809,7 @@ export default function RepoStructureSection() {
         
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background-color: rgba(155, 155, 155, 0.7);
+          border: transparent;
         }
 
         .animation-delay-200 {

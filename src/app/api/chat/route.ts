@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
@@ -17,59 +16,22 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { trimMessages, HumanMessage } from "@langchain/core/messages";
 
+interface RetrievedSource {
+  url: string;
+  score: number;
+  codeSummary: string;
+  summaryEmbedding: number[] | null;
+}
+
 // --- Supabase setup ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// --- Google AI setup ---
-interface EmbeddingValue { values: number[] }
-interface EmbeddingResponse {
-  embeddings: EmbeddingValue[];
-  data?: { embeddings: number[][] };
-}
-const ai = (() => {
-  if (process.env.GOOGLE_GENAI_USE_VERTEXAI === "true") {
-    return new GoogleGenAI({
-      vertexai: true,
-      project: process.env.GOOGLE_CLOUD_PROJECT,
-      location: process.env.GOOGLE_CLOUD_LOCATION,
-    });
-  }
-  return new GoogleGenAI({
-    vertexai: false,
-    apiKey: process.env.GEMINI_API_KEY,
-  });
-})();
-
 // --- Utility functions ---
-async function generateEmbeddings(text: string): Promise<number[]> {
-  const response = await ai.models.embedContent({
-    model: "text-embedding-004",
-    contents: text,
-  });
-  const typed = response as EmbeddingResponse;
-  if (typed.embeddings?.[0]?.values) {
-    return typed.embeddings[0].values;
-  }
-  if (typed.data?.embeddings?.[0]) {
-    return typed.data.embeddings[0];
-  }
-  throw new Error("Invalid embedding format");
-}
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0, na = 0, nb = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    na += a[i] ** 2;
-    nb += b[i] ** 2;
-  }
-  return dot / (Math.sqrt(na) * Math.sqrt(nb));
-}
-
-async function fetchFileContent(url: string): Promise<string | null> {
+async function fetchFileContent(url: string): Promise<string> {
   try {
     let resp;
     if (url.includes("raw.githubusercontent.com")) {
@@ -90,52 +52,26 @@ async function fetchFileContent(url: string): Promise<string | null> {
   }
 }
 
-interface Summary {
-  codeSummary: string;
-  summaryEmbedding: number[] | null;
-  url: string;
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const msg = body.message as string;
-    const summaries = body.summaries as Summary[];
+    const sources = body.sources as RetrievedSource[];
+    const threadId = body.threadId as string | undefined;
 
-    // 1) Embed the user query
-    const queryEmbedding = await generateEmbeddings(msg);
+    if (!sources || !Array.isArray(sources)) {
+      throw new Error("No sources provided");
+    }
 
-    // 2) Compute similarity scores for all summaries
-    console.log("Received summaries count:", summaries.length);
-    console.log("Summaries with embeddings count:", summaries.filter(s => s.summaryEmbedding).length);
+    console.log("Processing chat with", sources.length, "sources");
 
-    const sims = summaries
-      .filter((s) => s.summaryEmbedding)
-      .map((s) => {
-        const score = cosineSimilarity(queryEmbedding, s.summaryEmbedding!);
-        console.log(`URL: ${s.url}, Score: ${score}`);
-        return {
-          ...s,
-          score,
-        };
-      });
-
-    // Sort the results in descending order based on the score
-    sims.sort((a, b) => b.score - a.score);
-
-    // Select the top 3 highest scoring summaries
-    const top3Sims = sims.slice(0, 3);
-
-    // Log the top 3 highest scoring URLs
-    console.log("Top 3 Retrieved Code Files:", top3Sims.map(s => s.url), top3Sims.map(s => ({ url: s.url, score: s.score })));
-
-    // 3) Fetch file contents and build context
+    // Fetch file contents and build context
     const structured = await Promise.all(
-      top3Sims.map(async (s) => ({
+      sources.map(async (s) => ({
         filePath: s.url.includes("/contents/")
           ? s.url.split("/contents/")[1]
           : s.url.split("/main/")[1] || s.url,
-        fileContent: (await fetchFileContent(s.url)) || "No content",
+        fileContent: await fetchFileContent(s.url),
         codeSummary: s.codeSummary,
       }))
     );
@@ -186,26 +122,27 @@ export async function POST(request: Request) {
       .compile({ checkpointer });
 
     // 9) Invoke with a stable threadId
-    const threadId = body.threadId || uuidv4();
+    const finalThreadId = threadId || uuidv4();
     const result = await graph.invoke(
       { messages: [new HumanMessage(msg)] },
-      { configurable: { thread_id: threadId } }
+      { configurable: { thread_id: finalThreadId } }
     );
     const assistantMsg = result.messages.at(-1)!.content;
 
-    // 10) Persist the final turn
+    // Persist the final turn
     await supabase.from("chat_data").insert({
       user_query: msg,
       bot_response: assistantMsg,
-      context_urls: top3Sims.map((s) => s.url),
-      similarity_scores: top3Sims.map((s) => ({ url: s.url, score: s.score })),
-      thread_id: threadId,
+      context_urls: sources.map((s) => s.url),
+      similarity_scores: sources.map((s) => ({ url: s.url, score: s.score })),
+      thread_id: finalThreadId,
     });
 
+    // Return the response
     return NextResponse.json({
       success: true,
       response: assistantMsg,
-      threadId,
+      threadId: finalThreadId,
     });
   } catch (err) {
     console.error("POST error:", err);
