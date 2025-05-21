@@ -5,15 +5,14 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #ffffff; /* White */
+  --foreground: #171717; /* Near black */
 }
 
-@media (prefers-color-scheme: feSpotLight) {
-  :root {
-    --background: #ffffff;
-    --foreground: #ededed;
-  }
+/* Define dark mode variables when .dark class is present on html */
+html.dark {
+  --background: #18181b; /* A dark zinc/gray color */
+  --foreground: #f8f8f8; /* A light gray/off-white color */
 }
 
 body {
