@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import neo4j from "neo4j-driver";
 import pLimit from "p-limit";
+import { updateProgress } from "./progress/utils";
 
 // Configuration
 const API_CONFIG = {
@@ -103,6 +104,17 @@ export async function POST(req: Request) {
       .filter((n: FileNode) => !!n.properties.url);
 
     console.log(`🔍 Found ${fileNodes.length} files to vectorize`);
+    
+    // Initialize progress tracking
+    const totalFiles = fileNodes.length;
+    let processedFiles = 0;
+    
+    // Update initial progress
+    updateProgress(userId, {
+      totalFiles,
+      processedFiles: 0,
+      currentFile: ""
+    });
 
     // 2) Process in parallel, but each write uses its own session
     const limit = pLimit(API_CONFIG.CONCURRENT_REQUESTS);
@@ -110,17 +122,27 @@ export async function POST(req: Request) {
       fileNodes.map((node: FileNode) =>
         limit(async () => {
           const url: string = node.properties.url;
+          // Update progress with current file
+          updateProgress(userId, {
+            currentFile: url,
+            processedFiles
+          });
+          
           console.log(`➡️ Fetching ${url}`);
           let content = "";
           try {
             const res = await fetch(url);
             if (!res.ok) {
               console.warn(`Fetch failed (${res.status}): ${url}`);
+              processedFiles++;
+              updateProgress(userId, { processedFiles });
               return;
             }
             content = await res.text();
           } catch (e) {
             console.warn(`Fetch error for ${url}:`, e);
+            processedFiles++;
+            updateProgress(userId, { processedFiles });
             return;
           }
 
@@ -128,6 +150,8 @@ export async function POST(req: Request) {
           const maxBytes = 4 * 1024 * 1024;
           if (Buffer.byteLength(content, "utf8") > maxBytes) {
             console.warn(`Skipping ${url}: >4MB`);
+            processedFiles++;
+            updateProgress(userId, { processedFiles });
             return;
           }
 
@@ -152,20 +176,26 @@ export async function POST(req: Request) {
                 `,
                 { url, contentEmbedding, summaryEmbedding }
               );
-              console.log(`✅ Stored embeddings for ${url}`);
+              console.log(`✅ Stored embeddings for ${url} - ${processedFiles + 1}/${totalFiles}`);
             } finally {
               await writeSession.close();
             }
+            
+            // Update progress
+            processedFiles++;
+            updateProgress(userId, { processedFiles });
 
           } catch (embedErr) {
             console.error(`❌ Embedding error for ${url}:`, embedErr);
+            // Still update progress even for errors
+            processedFiles++;
+            updateProgress(userId, { processedFiles });
           }
         })
       )
     );
 
     return NextResponse.json(
-      { message: "Graph vectorized successfully" },
       { status: 200 }
     );
 
