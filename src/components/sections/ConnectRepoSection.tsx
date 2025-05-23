@@ -49,6 +49,14 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
   const [vectorizeMessage, setVectorizeMessage] = useState("")
   const [activeTab, setActiveTab] = useState("connect")
   const [statusMessage, setStatusMessage] = useState("")
+  
+  // Progress tracking states
+  const [showProgress, setShowProgress] = useState(false)
+  const [progressPhase, setProgressPhase] = useState<"processing" | "vectorizing">("processing")
+  const [currentFile, setCurrentFile] = useState("")
+  const [processedFiles, setProcessedFiles] = useState(0)
+  const [totalFiles, setTotalFiles] = useState(0)
+  const [progressPercentage, setProgressPercentage] = useState(0)
 
   // Extract repo name from URL for display purposes
   const getRepoNameFromUrl = (url: string) => {
@@ -92,11 +100,34 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
     setLoading(true)
     setError("")
     setContents([])
+    setShowProgress(true)
+    setProgressPhase("processing")
+    setCurrentFile("")
+    setProcessedFiles(0)
+    setTotalFiles(0)
+    setProgressPercentage(0)
     setStatusMessage(`Connecting to ${url}...`)
 
     const startTime = performance.now() // Start time
 
     try {
+      // Set up EventSource for processing progress updates
+      const eventSource = new EventSource(`/api/connect-repo/progress?userId=${user?.id}`)
+      
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        if (data.totalFiles > 0) {
+          setTotalFiles(data.totalFiles)
+          setProcessedFiles(data.processedFiles)
+          setCurrentFile(data.currentFile || "")
+          setProgressPercentage(Math.floor((data.processedFiles / data.totalFiles) * 100))
+        }
+      }
+      
+      eventSource.onerror = () => {
+        eventSource.close()
+      }
+      
       const response = await fetch("/api/connect-repo", {
         method: "POST",
         headers: {
@@ -107,6 +138,9 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
           userId: user?.id,
         }),
       })
+      
+      // Close the event source when processing is done
+      eventSource.close()
 
       const endTime = performance.now() // End time
       const duration = endTime - startTime // Calculate duration
@@ -141,8 +175,28 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
         })
 
         setVectorizing(true)
-        setVectorizeMessage("")
-        setStatusMessage(`Vectorizing ${url}...`)
+        setVectorizeMessage("Vectorizing repository...")
+        setProgressPhase("vectorizing")
+        setProcessedFiles(0)
+        setProgressPercentage(0)
+
+        // Set up EventSource for vectorizing progress updates
+        const vectorizeEventSource = new EventSource(`/api/vectorize/progress?userId=${user?.id}`)
+        
+        vectorizeEventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+          if (data.totalFiles > 0) {
+            setTotalFiles(data.totalFiles)
+            setProcessedFiles(data.processedFiles)
+            setCurrentFile(data.currentFile || "")
+            setProgressPercentage(Math.floor((data.processedFiles / data.totalFiles) * 100))
+          }
+        }
+        
+        vectorizeEventSource.onerror = () => {
+          vectorizeEventSource.close()
+        }
+
         try {
           const startTime = performance.now() // Start time for vectorize request
           const vectorizeRes = await fetch("/api/vectorize", {
@@ -166,6 +220,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
           setStatusMessage(`Error vectorizing ${getRepoNameFromUrl(url)}`)
         } finally {
           setVectorizing(false)
+          setShowProgress(false)
         }
       }
     } catch (err: unknown) {
@@ -304,11 +359,30 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                         </Button>
                       </div>
                       {error && <div className="text-sm text-red-500 mt-1">{error}</div>}
-                      {statusMessage && !error && (
-                        <div className="text-sm text-gray-700 mt-2 font-medium py-1">{statusMessage}</div>
-                      )}
-                      {vectorizeMessage && (
-                        <div className="text-sm text-gray-700 mt-2 font-medium py-1">{vectorizeMessage}</div>
+                    </div>
+                    
+                    <div>
+                      {/* Progress bar */}
+                      {showProgress && (
+                        <div className="px-6 py-4 border-b border-gray-800/10">
+                          <div className="mb-2 flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-700">
+                              {progressPhase === "processing" ? "Processing" : "Vectorizing"}: {processedFiles}/{totalFiles} files
+                            </span>
+                            <span className="text-sm text-gray-500">{progressPercentage}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div 
+                              className="bg-[#f8b878] h-2.5 rounded-full transition-all duration-300 ease-in-out" 
+                              style={{ width: `${progressPercentage}%` }}
+                            ></div>
+                          </div>
+                          {currentFile && (
+                            <div className="mt-2 text-xs text-gray-600 truncate" title={currentFile}>
+                              {progressPhase === "processing" ? "Processing" : "Vectorizing"}: {currentFile}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -444,11 +518,6 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
 
               <CardFooter className="flex justify-between border-t border-gray-800/10 p-4 bg-[#f9f9f7]/50">
                 <div className="text-xs text-gray-600">Connected as: {user?.email || "Guest"}</div>
-                {statusMessage && (
-                  <div className="text-xs font-medium text-gray-700 max-w-[60%] truncate" title={statusMessage}>
-                    {statusMessage}
-                  </div>
-                )}
               </CardFooter>
             </>
           ) : (

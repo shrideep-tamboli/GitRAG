@@ -3,6 +3,7 @@ import axios from "axios";
 import { get_encoding } from "tiktoken";
 import { GoogleGenAI } from "@google/genai";
 import pLimit from "p-limit";
+import { updateProgress } from "./progress/utils";
 
 // Interface for code summary metadata
 interface CodeSummaryMetadata {
@@ -211,15 +212,36 @@ const discoverRepositoryFiles = async (
 // File processing logic
 const processRepositoryFiles = async (
   filesToProcess: RepositoryItem[],
-  runningInputTokenSum: { sum: number } = { sum: 0 }
+  runningInputTokenSum: { sum: number } = { sum: 0 },
+  userId?: string
 ): Promise<void> => {
   const limit = pLimit(API_CONFIG.CONCURRENT_REQUESTS);
+  let processedCount = 0;
+  const totalFiles = filesToProcess.length;
+  
+  // Initialize progress if userId is provided
+  if (userId) {
+    updateProgress(userId, {
+      totalFiles,
+      processedFiles: 0,
+      currentFile: ""
+    });
+  }
 
   await Promise.all(
     filesToProcess.map((item) =>
       limit(async () => {
         try {
           if (!item.download_url) return;
+          
+          // Update progress with current file
+          if (userId) {
+            updateProgress(userId, {
+              currentFile: item.path,
+              processedFiles: processedCount
+            });
+          }
+          
           const codeContent = await fetchCodeContent(item.download_url);
           if (!codeContent) return;
 
@@ -231,9 +253,24 @@ const processRepositoryFiles = async (
           runningInputTokenSum.sum += current_input_token;
           item.total_input_token = runningInputTokenSum.sum;
 
-          console.log(`✅ ${item.name} processed (${current_input_token} tokens)`);
+          // Increment processed count and update progress
+          processedCount++;
+          if (userId) {
+            updateProgress(userId, {
+              processedFiles: processedCount
+            });
+          }
+
+          console.log(`✅ ${item.name} processed (${current_input_token} tokens) - ${processedCount}/${totalFiles}`);
         } catch (error) {
           console.error(`❌ Error processing ${item.path}:`, error);
+          // Still increment for error cases to maintain accurate progress
+          processedCount++;
+          if (userId) {
+            updateProgress(userId, {
+              processedFiles: processedCount
+            });
+          }
         }
       })
     )
@@ -245,7 +282,8 @@ const fetchRepositoryContents = async (
   repoUrl: string,
   token: string,
   path = "",
-  runningInputTokenSum: { sum: number } = { sum: 0 }
+  runningInputTokenSum: { sum: number } = { sum: 0 },
+  userId?: string
 ): Promise<RepositoryItem[]> => {
   console.log("🔍 Discovering repository files...");
   const allItems = await discoverRepositoryFiles(repoUrl, token, path);
@@ -258,7 +296,7 @@ const fetchRepositoryContents = async (
   );
 
   console.log(`📂 ${filesToProcess.length} files to process`);
-  await processRepositoryFiles(filesToProcess, runningInputTokenSum);
+  await processRepositoryFiles(filesToProcess, runningInputTokenSum, userId);
 
   return allItems;
 };
@@ -268,7 +306,7 @@ export async function POST(req: Request) {
   const startTime = performance.now();
 
   try {
-    const { url } = await req.json();
+    const { url, userId } = await req.json();
     const token = process.env.git_api_key;
     const groqKey = process.env.GROQ_API_KEY;
 
@@ -276,7 +314,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
 
-    const contents = await fetchRepositoryContents(url, token, "", { sum: 0 });
+    const contents = await fetchRepositoryContents(url, token, "", { sum: 0 }, userId);
 
     if (!contents.length) {
       return NextResponse.json({ message: "No content found" }, { status: 200 });
