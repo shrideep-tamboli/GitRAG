@@ -106,7 +106,6 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
     setProcessedFiles(0)
     setTotalFiles(0)
     setProgressPercentage(0)
-    setStatusMessage(`Connecting to ${url}...`)
 
     const startTime = performance.now() // Start time
 
@@ -160,7 +159,6 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
         setRepoUrl(url)
         setInputRepoUrl("")
         setActiveTab("connected")
-        setStatusMessage(`Successfully connected to ${url}`)
 
         await fetch("/api/repo-structure", {
           method: "POST",
@@ -175,7 +173,6 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
         })
 
         setVectorizing(true)
-        setVectorizeMessage("Vectorizing repository...")
         setProgressPhase("vectorizing")
         setProcessedFiles(0)
         setProgressPercentage(0)
@@ -199,7 +196,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
 
         try {
           const startTime = performance.now() // Start time for vectorize request
-          const vectorizeRes = await fetch("/api/vectorize", {
+          await fetch("/api/vectorize", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -209,9 +206,6 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
           const endTime = performance.now() // End time for vectorize request
           const duration = endTime - startTime // Calculate duration
           console.log(`Request to /api/vectorize took ${duration.toFixed(2)} ms`)
-
-          const vectorizeData = await vectorizeRes.json()
-          setVectorizeMessage(vectorizeData.message || "Vectorization complete!")
           setStatusMessage(`${getRepoNameFromUrl(url)} is ready to use`)
           onRepoConnected()
         } catch (vectorizeError: unknown) {
@@ -359,6 +353,12 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                         </Button>
                       </div>
                       {error && <div className="text-sm text-red-500 mt-1">{error}</div>}
+                      {statusMessage && !error && (
+                        <div className="text-sm text-gray-700 mt-2 font-medium py-1">{statusMessage}</div>
+                      )}
+                      {vectorizeMessage && (
+                        <div className="text-sm text-gray-700 mt-2 font-medium py-1">{vectorizeMessage}</div>
+                      )}
                     </div>
                     
                     <div>
@@ -518,6 +518,11 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
 
               <CardFooter className="flex justify-between border-t border-gray-800/10 p-4 bg-[#f9f9f7]/50">
                 <div className="text-xs text-gray-600">Connected as: {user?.email || "Guest"}</div>
+                {statusMessage && (
+                  <div className="text-xs font-medium text-gray-700 max-w-[60%] truncate" title={statusMessage}>
+                    {statusMessage}
+                  </div>
+                )}
               </CardFooter>
             </>
           ) : (

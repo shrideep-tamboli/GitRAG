@@ -196,7 +196,6 @@ export async function POST(req: Request) {
     );
 
     return NextResponse.json(
-      { message: "Graph vectorized successfully" },
       { status: 200 }
     );
 
