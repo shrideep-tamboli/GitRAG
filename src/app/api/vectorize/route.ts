@@ -6,9 +6,9 @@ import pLimit from "p-limit";
 
 // Configuration
 const API_CONFIG = {
-  CONCURRENT_REQUESTS: 3,
-  RATE_LIMIT_RPM: 120,    // adjust to your quota
-  BACKOFF_DELAY: 10,
+  CONCURRENT_REQUESTS: 100,
+  RATE_LIMIT_RPM: 500,
+  BACKOFF_DELAY: 5,
   MAX_RETRIES: 3,
 };
 
