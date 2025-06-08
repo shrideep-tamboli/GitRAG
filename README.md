@@ -16,6 +16,3 @@ The documentation will change as GitRag aims to find the most efficient way to c
 
 ## Contribution
 Want to contribute? See the next goals at [contributing.md](https://github.com/shrideep-tamboli/GitRAG/blob/main/CONTRIBUTING.md)
-
-## End of Version 0
-This change is to mark the 'Commit' for the beginning of AI Buildathion 2.0 by 100x Engineers ;)
