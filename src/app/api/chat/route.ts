@@ -58,6 +58,7 @@ export async function POST(request: Request) {
     const msg = body.message as string;
     const sources = body.sources as RetrievedSource[];
     const threadId = body.threadId as string | undefined;
+    const selectedContext = body.context as string[];
 
     if (!sources || !Array.isArray(sources)) {
       throw new Error("No sources provided");
@@ -85,8 +86,8 @@ export async function POST(request: Request) {
     const promptTemplate = ChatPromptTemplate.fromMessages([
       [
         "system",
-        `You are a concise assistant. Use the following files as context (path, content, summary)
-        to answer the user's question in ≤3 sentences:${contextStr}`,
+        `You are a concise assistant. If you're given a selectedContext array, use it to answer the user's question. Here's the selectedContext array: ${selectedContext}. 
+        If you're not given a selectedContext array, use the following files as context (path, content, summary) to answer the user's question:${contextStr}`,
       ],
       ["placeholder", "{messages}"],
     ]);

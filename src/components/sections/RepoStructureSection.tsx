@@ -78,25 +78,70 @@ export default function RepoStructureSection() {
 
   const [chatInput, setChatInput] = useState("")
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
-
-  // Auto-grow textarea up to 8 rows
-  const handleChatInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setChatInput(e.target.value);
-    const textarea = chatInputRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      const maxRows = 8;
-      const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight || '20', 10);
-      const maxHeight = maxRows * lineHeight;
-      textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
-    }
-  };
-
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isTyping, setIsTyping] = useState(false)
   const messagesStartRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const [threadId, setThreadId] = useState<string | null>(null);
+
+  // --- Dynamic suggestions: use URLs from all bot responses ---
+  // Collect all unique source file URLs from all bot messages
+  const suggestions: string[] = Array.from(
+    new Set(
+      messages
+        .filter(m => m.sender === 'bot' && m.sourceFiles)
+        .flatMap(m => m.sourceFiles?.map(f => f.url) || [])
+        .concat(graphData.nodes.map(node => node.id))
+    )
+  ) as string[]
+  
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([])
+  const [selectedContext, setSelectedContext] = useState<string[]>([])
+
+  // --- Filter logic: uses dynamic suggestions ---
+  const handleChatInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setChatInput(value)
+
+    const lastAtIndex = value.lastIndexOf('@') // find last '@'
+    const hasAt = lastAtIndex !== -1
+    const query = hasAt ? value.slice(lastAtIndex + 1).split(/\s/)[0] : '' // text after '@'
+
+    if (hasAt) {
+      const filtered = suggestions.filter(url =>
+        url.toLowerCase().includes(query.toLowerCase()) // filter URLs
+      )
+      setFilteredSuggestions(filtered)
+      setShowSuggestions(filtered.length > 0)
+    } else {
+      setShowSuggestions(false)
+    }
+
+    // auto-grow textarea
+    const textarea = chatInputRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+      const maxRows = 8
+      const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight || '20', 10)
+      const maxHeight = maxRows * lineHeight
+      textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px'
+    }
+  }
+
+  const handleSelectSuggestion = (option: string) => {
+    const atIndex = chatInput.lastIndexOf('@')
+    const mentionText = chatInput.slice(atIndex).split(/\s/)[0]
+    // remove @mention text from input
+    const newValue = chatInput.replace(`@${mentionText}`, '')
+    setChatInput(newValue.trimStart()) // clean up space
+    setShowSuggestions(false)
+    // Add selected item if not already added
+    if (!selectedContext.includes(option)) {
+      setSelectedContext(prev => [...prev, option])
+    }
+    chatInputRef.current?.focus()
+  }
 
   const fetchGraphData = useCallback(async () => {
     if (!user?.id) {
@@ -338,7 +383,8 @@ export default function RepoStructureSection() {
       const chatPayload = {
         message: chatInput,
         sources: sources,
-        threadId: threadId
+        threadId: threadId,
+        context: selectedContext
       };
       
       const chatResponse = await axios.post("/api/chat", chatPayload);
@@ -553,32 +599,55 @@ export default function RepoStructureSection() {
                 
                 <div ref={messagesStartRef} />
               </div>
-              <div className="p-2 border-t border-gray-800/20 flex items-center space-x-2">
-                <textarea
-                  ref={chatInputRef}
-                  rows={1}
-                  value={chatInput}
-                  onChange={handleChatInputChange}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSend()
-                    }
-                  }}
-                  placeholder="Enter message"
-                  style={{ minHeight: '2.5rem', maxHeight: '22.5rem', overflowY: 'auto' }}
-                  className="flex-1 p-2 border-2 border-gray-800/20 rounded-md outline-none focus:ring-2 focus:ring-[#f8b878] text-gray-800 bg-white resize-none custom-chat-scrollbar"
-                />
-                <button
-                  onClick={handleSend}
-                  className="p-2 bg-[#f8b878] text-gray-800 rounded-md hover:bg-[#f6a55f] transition-colors"
-                  aria-label="Send message"
-                >
-                  <Send className="h-5 w-5" />
-                </button>
+              <div className="p-2 border-t border-gray-800/20 flex items-center space-x-2 relative">
+                {showSuggestions && (
+                  <ul className={`absolute bottom-full mb-1 left-2 bg-white border rounded-md shadow-lg w-64 z-10 max-h-40 overflow-y-auto 
+                  [&::-webkit-scrollbar]:w-2 
+                  [&::-webkit-scrollbar-thumb]:bg-gray-300/50 
+                  [&::-webkit-scrollbar-thumb]:rounded-full 
+                  [&::-webkit-scrollbar-track]:bg-transparent`}
+                  >
+                    {filteredSuggestions.map((url, idx) => (
+                      <li key={idx} className="px-3 py-1 hover:bg-gray-100 cursor-pointer" 
+                      onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(url) }}
+                      >
+                      {url}
+                      </li>
+                      ))}
+                    </ul> 
+                  )}
+                  {/* Pills + Input in Flexbox */}
+                    {/* Elliptical Pills for Selected Context */}
+                    {selectedContext.map((ctx, idx) => (
+                      <div
+                        key={idx}
+                        className="px-2 py-1 bg-gray-200 text-sm rounded-full flex items-center space-x-1"
+                      >
+                        <span className="text-gray-800">@{ctx}</span>
+                        <X
+                          className="w-3 h-3 text-gray-600 cursor-pointer"
+                          onClick={() =>
+                            setSelectedContext((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                        />
+                      </div>
+                    ))}
+                  <textarea
+                    ref={chatInputRef}
+                    rows={1}
+                    value={chatInput}
+                    onChange={handleChatInputChange}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                    placeholder="Type a message or use @ to mention files"
+                    style={{ minHeight: '2.5rem', maxHeight: '22.5rem', overflowY: 'auto' }}
+                    className="flex-1 p-2 border-2 border-gray-800/20 rounded-md outline-none focus:ring-2 focus:ring-[#f8b878] text-gray-800 bg-white resize-none custom-chat-scrollbar"
+                  />
+                  <button onClick={handleSend} className="p-2 bg-[#f8b878] text-gray-800 rounded-md hover:bg-[#f6a55f] transition-colors" aria-label="Send message">
+                    <Send className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
           {/* Source Dialog */}
           {isSourceDialogOpen && (
