@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ProfileDropdown } from '../ProfileDropdown'
 import { FaGithub } from 'react-icons/fa'
+import { FlaskConical } from 'lucide-react'
 
 export function Header() {
   return (
@@ -18,6 +19,10 @@ export function Header() {
 
           {/* Right side: GitHub + Profile */}
           <div className="flex items-center gap-4 ml-auto">
+            <Link href="/research" className="text-gray-600 hover:text-gray-900">
+              <FlaskConical className="w-6 h-6" />
+            </Link>
+
             <Link 
               href="https://github.com/shrideep-tamboli/GitRAG" 
               target="_blank"
