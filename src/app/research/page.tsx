@@ -35,6 +35,6 @@ export default function ResearchPage() {
     }
 
     return (
-        <Lab />
+            <Lab />
     )
 }
