@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/AuthContext"
+import { useRepo } from "@/contexts/RepoContext"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -39,6 +40,7 @@ interface ConnectRepoSectionProps {
 }
 
 export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true }: ConnectRepoSectionProps) {
+  const { setIsRepoConnected } = useRepo()
   const { user } = useAuth()
   const [repoUrl, setRepoUrl] = useState("")
   const [inputRepoUrl, setInputRepoUrl] = useState("")
@@ -82,6 +84,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
         const data = await response.json()
         if (data.repoUrl) {
           setRepoUrl(data.repoUrl)
+          setIsRepoConnected(true)
           setActiveTab("connected")
         }
       } catch (err: unknown) {
@@ -157,7 +160,9 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
       } else {
         setContents(data.contents)
         setRepoUrl(url)
+        setIsRepoConnected(true)
         setInputRepoUrl("")
+        setActiveTab("connected")
         setActiveTab("connected")
 
         await fetch("/api/repo-structure", {
