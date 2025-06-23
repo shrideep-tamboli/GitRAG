@@ -44,10 +44,20 @@ interface ChatMessage {
   sourceFiles?: SourceFile[]
 }
 
-export default function ChatComponent() {
+interface ChatComponentProps {
+  threadId?: string;
+}
 
-  // NEW: State for source-click dialog
+export default function ChatComponent({ threadId: propThreadId }: ChatComponentProps) {
+  const [internalThreadId, setInternalThreadId] = useState(propThreadId || `thread_${Math.random().toString(36).substr(2, 9)}`)
   const { user } = useAuth()
+  
+  // Update internal threadId if prop changes
+  useEffect(() => {
+    if (propThreadId) {
+      setInternalThreadId(propThreadId)
+    }
+  }, [propThreadId])
   const [isSourceDialogOpen, setIsSourceDialogOpen] = useState(false)
   const [sourceDialogContent, setSourceDialogContent] = useState<string>("")
   const [sourceDialogTitle, setSourceDialogTitle] = useState<string>("")
@@ -61,7 +71,6 @@ export default function ChatComponent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [width, setWidth] = useState(0)
-  const [threadId, setThreadId] = useState<string | null>(null);
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
     links: []
@@ -306,15 +315,15 @@ export default function ChatComponent() {
       const chatPayload = {
         message: chatInput,
         sources: sources,
-        threadId: threadId,
+        threadId: internalThreadId,
         context: selectedContext
       };
       
       const chatResponse = await axios.post("/api/chat", chatPayload);
       
-      // Save the threadId if returned
-      if (chatResponse.data.threadId) {
-        setThreadId(chatResponse.data.threadId);
+      // Update the threadId if a new one is returned
+      if (chatResponse.data.threadId && chatResponse.data.threadId !== internalThreadId) {
+        setInternalThreadId(chatResponse.data.threadId);
       }
       
       // Replace the retrieval message with the final response
@@ -352,7 +361,7 @@ export default function ChatComponent() {
   };
 
   return (
-    <div className="flex flex-col h-[80vh] bg-[#ffffff] w-full max-h-[80vh]">
+    <div className="flex flex-col h-[70vh] bg-[#ffffff] w-full max-h-[70vh]">
       <div className="flex-1 w-full h-full p-2 m-0">
         {/* Chat + Source Dialog Section */}
         <div className="flex gap-4 h-full w-full">
