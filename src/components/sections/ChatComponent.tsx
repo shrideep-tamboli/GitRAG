@@ -47,9 +47,9 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isTyping, setIsTyping] = useState(false)
   const messagesStartRef = useRef<HTMLDivElement>(null)
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [width, setWidth] = useState(0)
+  const [, setError] = useState("");
+  const [, setLoading] = useState(false);
+  const [, setWidth] = useState(0)
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
     links: []
