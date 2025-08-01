@@ -185,7 +185,7 @@ export async function POST(request: Request) {
             needed: result.needed !== false,
             enough: result.enough === true
           };
-        } catch (e) {
+        } catch (_e) {
           console.error('Failed to parse LLM response:', responseStr);
           return { needed: true, enough: false };
         }

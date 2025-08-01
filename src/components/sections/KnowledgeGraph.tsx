@@ -22,7 +22,7 @@ const ForceGraph3D = dynamic(() => {
   loading: () => <div>Loading 3D visualization...</div>
 });
 
-interface Node {
+export interface Node {
   id: string
   label: string
   type: string
@@ -32,13 +32,13 @@ interface Node {
   summaryEmbedding?: number[] | null
 }
 
-interface Link {
+export interface Link {
   source: string
   target: string
   relationship: string
 }
 
-interface GraphData {
+export interface GraphData {
   nodes: Node[] 
   links: Link[]
 }

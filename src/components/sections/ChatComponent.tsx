@@ -7,28 +7,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Highlight, themes } from 'prism-react-renderer'
 import { useAuth } from '@/lib/AuthContext'
-
-interface Node {
-  id: string
-  label: string
-  type: string
-  url: string
-  codeSummary?: string
-  contentEmbedding?: number[] | null
-  summaryEmbedding?: number[] | null
-}
-
-interface Link {
-  source: string
-  target: string
-  relationship: string
-}
-
-interface GraphData {
-  nodes: Node[] 
-  links: Link[]
-}
-
+import type { GraphData } from './KnowledgeGraph'
 interface SourceFile {
   url: string
   score: number

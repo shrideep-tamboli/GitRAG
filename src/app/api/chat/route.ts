@@ -13,7 +13,7 @@ import {
 } from "@langchain/langgraph";
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { trimMessages, HumanMessage } from "@langchain/core/messages";
 
 interface RetrievedSource {
@@ -60,7 +60,6 @@ export async function POST(request: Request) {
     const msg = body.message as string;
     const sources = body.sources as RetrievedSource[];
     const threadId = body.threadId as string | undefined;
-    const selectedContext = body.context as string[];
 
     if (!sources || !Array.isArray(sources) || sources.length === 0) {
       throw new Error("No sources provided");
