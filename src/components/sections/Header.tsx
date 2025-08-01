@@ -1,8 +1,13 @@
+"use client"
 import Link from 'next/link'
 import { ProfileDropdown } from '../ProfileDropdown'
 import { FaGithub } from 'react-icons/fa'
+import { FlaskConical } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useRepo } from '@/contexts/RepoContext'
 
 export function Header() {
+  const { isRepoConnected } = useRepo()
   return (
     <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-800 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -18,6 +23,19 @@ export function Header() {
 
           {/* Right side: GitHub + Profile */}
           <div className="flex items-center gap-4 ml-auto">
+            <Link 
+              href="/research" 
+              className={cn(
+                "text-gray-600 hover:text-gray-900 transition-colors",
+                !isRepoConnected && "opacity-50 cursor-not-allowed"
+              )}
+              aria-disabled={!isRepoConnected}
+              onClick={(e) => !isRepoConnected && e.preventDefault()}
+              title={!isRepoConnected ? "Connect a repository to access research" : "Research"}
+            >
+              <FlaskConical className="w-6 h-6" />
+            </Link>
+
             <Link 
               href="https://github.com/shrideep-tamboli/GitRAG" 
               target="_blank"
