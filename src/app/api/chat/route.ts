@@ -21,6 +21,7 @@ interface RetrievedSource {
   score: number;
   codeSummary: string;
   summaryEmbedding: number[] | null;
+  reasoning?: string;
 }
 
 // --- Supabase setup ---
@@ -74,38 +75,27 @@ export async function POST(request: Request) {
       temperature: 0.2, // Lower temperature for more deterministic decisions
     });
 
-    // Build context string from selected sources
+    // Build context string with reasoning and file content for each source
     const contextStr = await Promise.all(sources.map(async (source) => {
       const fileContent = await fetchFileContent(source.url);
-      const filePath = source.url.includes("/contents/")
-        ? source.url.split("/contents/")[1]
-        : source.url.split("/main/")[1] || source.url;
-      
-      return {
-        filePath,
-        content: fileContent,
-        summary: source.codeSummary
-      };
-    }))
-    .then(files => 
-      files.map(file => 
-        JSON.stringify(file, null, 2)
-          .replace(/\{/g, '{{')
-          .replace(/\}/g, '}}')
-      )
-      .join('\n\n')
-    );
+      return `Reasoning: ${source.reasoning || 'Selected based on relevance score.'}\nFile Content:\n${fileContent}`;
+    })).then(results => results.join('\n\n' + '-'.repeat(80) + '\n\n'));
+
+    console.log("Sending to Gemini:", {
+      message: msg,
+      context: contextStr  // Log how the context is being formatted
+    });
     
     console.log(`Using ${sources.length} relevant files for context`);
 
     // Build the prompt template with proper escaping
     const promptTemplate = ChatPromptTemplate.fromMessages([
-      ["system", `You are a helpful coding assistant. Use the following files as context to answer the user's question. Only use the information from these files to answer the question.
+      ["system", `You are a helpful AI assistant that answers questions about a codebase.
+      Use the following context with reasoning to answer the user's question.      
       
-      Context files:
-      ${contextStr}
+      {context}
       
-      If the answer cannot be found in the provided context, say "I couldn't find the answer in the provided files."`],
+      If the answer cannot be found in the provided context, say "I couldn't find the answer in the provided context."`],
       ["human", "{messages}"],
     ]);
     const trimmer = trimMessages({
@@ -119,7 +109,10 @@ export async function POST(request: Request) {
     // 7) Define the graph node
     const callModel = async (state: typeof MessagesAnnotation.State) => {
       const msgs = await trimmer.invoke(state.messages);
-      const prompt = await promptTemplate.invoke({ messages: msgs });
+      const prompt = await promptTemplate.invoke({ 
+        messages: msgs,
+        context: contextStr,
+      });
       const res = await llm.invoke(prompt);
       return { messages: [res] };
     };

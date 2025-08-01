@@ -9,10 +9,11 @@ import { Highlight, themes } from 'prism-react-renderer'
 import { useAuth } from '@/lib/AuthContext'
 import type { GraphData } from './KnowledgeGraph'
 interface SourceFile {
-  url: string
-  score: number
-  codeSummary?: string
-  summaryEmbedding?: number[] | null
+  url: string;
+  score: number;
+  codeSummary?: string;
+  summaryEmbedding?: number[] | null;
+  reasoning?: string;
 }
 
 interface ChatMessage {
@@ -269,33 +270,36 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
     try {
       // Step 1: Retrieve relevant sources
       const retrieveResponse = await axios.post("/api/retrieve", retrievePayload);
-      const { sources } = retrieveResponse.data;
+      const { sources, reasoning: retrievalReasoning } = retrieveResponse.data;
       
       // Update the retrieval message with the found sources
-      setMessages(prev => {
-        const newMessages = [...prev];
-        const retrievalIndex = newMessages.findIndex(m => m.id === retrievalId);
-        if (retrievalIndex !== -1) {
-          newMessages[retrievalIndex] = {
-            ...newMessages[retrievalIndex],
-            text: "🔍 Found relevant code files. Generating response...",
-            sourceFiles: sources.map((s: SourceFile) => ({
-              url: s.url,
-              score: s.score,
-              codeSummary: s.codeSummary,
-              summaryEmbedding: s.summaryEmbedding
-            }))
-          };
-        }
-        return newMessages;
-      });
+      const updatedMessages = [...messages];
+      const retrievalIndex = updatedMessages.findIndex(m => m.id === retrievalId);
+      if (retrievalIndex !== -1) {
+        updatedMessages[retrievalIndex] = {
+          ...updatedMessages[retrievalIndex],
+          text: "🔍 Found relevant code files. Generating response...",
+          sourceFiles: sources.map((s: any) => ({
+            url: s.url,
+            score: s.score,
+            codeSummary: s.codeSummary,
+            summaryEmbedding: s.summaryEmbedding,
+            reasoning: s.reasoning
+          }))
+        };
+        setMessages(updatedMessages);
+      }
       
-      // Step 2: Get LLM response with the retrieved sources
+      // Step 2: Get LLM response with the retrieved sources and reasoning
       const chatPayload = {
         message: chatInput,
-        sources: sources,
+        sources: sources.map((s: any) => ({
+          ...s,
+          reasoning: s.reasoning || `Selected based on relevance score of ${s.score?.toFixed(2) || 'high'}.`
+        })),
         threadId: internalThreadId,
-        context: selectedContext
+        context: selectedContext,
+        retrievalReasoning: retrievalReasoning || 'The system selected these files based on relevance to your question.'
       };
       
       const chatResponse = await axios.post("/api/chat", chatPayload);
@@ -306,22 +310,20 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
       }
       
       // Replace the retrieval message with the final response
-      setMessages(prev => {
-        const newMessages = prev.filter(m => m.id !== retrievalId);
-        return [
-          {
-            sender: "bot",
-            text: chatResponse.data.response,
-            sourceFiles: sources.map((s: SourceFile) => ({
-              url: s.url,
-              score: s.score,
-              codeSummary: s.codeSummary,
-              summaryEmbedding: s.summaryEmbedding
-            }))
-          },
-          ...newMessages
-        ];
-      });
+      setMessages(prevMessages => [
+        {
+          sender: "bot" as const,
+          text: chatResponse.data.response,
+          sourceFiles: sources.map((s: any) => ({
+            url: s.url,
+            score: s.score,
+            codeSummary: s.codeSummary,
+            summaryEmbedding: s.summaryEmbedding,
+            reasoning: s.reasoning
+          }))
+        },
+        ...prevMessages.filter(m => m.id !== retrievalId)
+      ]);
       
       console.log("Chat completed with sources:", sources);
       
@@ -485,7 +487,6 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                             >
                                               {displayPath}
                                             </button>
-                                            <span className="text-gray-500 whitespace-nowrap">({(file.score * 100).toFixed(1)}%)</span>
                                           </div>
                                         );
                                       })}

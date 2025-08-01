@@ -69,6 +69,7 @@ export interface RetrievedSource {
   score: number;
   codeSummary: string;
   summaryEmbedding: number[] | null;
+  reasoning: string;  // Made this required since we always provide it
 }
 
 export async function POST(request: Request) {
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
     // Sort the results in descending order based on the score
     sims.sort((a, b) => b.score - a.score);
 
-        // Sort by score and take top 3
+    // Sort by score and take top 6
     const sortedSims = [...sims].sort((a, b) => b.score - a.score).slice(0, 3);
 
     // Function to fetch file content
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
       file: FileContext,
       query: string,
       previousContext: string
-    ): Promise<{ needed: boolean; enough: boolean }> {
+    ): Promise<{ needed: boolean; enough: boolean; reasoning: string }> {
       // Create the prompt with proper escaping of curly braces
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", `You are an AI assistant that determines if a file is needed to answer a user's query.
@@ -183,16 +184,17 @@ export async function POST(request: Request) {
         
           return {
             needed: result.needed !== false,
-            enough: result.enough === true
+            enough: result.enough === true,
+            reasoning: result.reasoning || ''
           };
         } catch {
           console.error('Failed to parse LLM response:', responseStr);
-          return { needed: true, enough: false };
+          return { needed: true, enough: false, reasoning: '' };
         }
     }
 
     // Process files in order of relevance
-    const selectedFiles = [];
+    const selectedFiles: RetrievedSource[] = [];
     for (const sim of sortedSims) {
       if (selectedFiles.length >= 3) break;
 
@@ -211,39 +213,45 @@ export async function POST(request: Request) {
         .map(f => `File: ${f.url.split('/').pop()}\nSummary: ${f.codeSummary}`)
         .join('\n\n');
 
-      const { needed, enough } = await shouldUseFile(
+      const fileAnalysis = await shouldUseFile(
         fileContext,
         body.message,
         previousContext
       );
 
-      if (needed) {
+      if (fileAnalysis.needed) {
         selectedFiles.push({
           url: sim.url,
           score: sim.score,
           codeSummary: sim.codeSummary,
-          summaryEmbedding: sim.summaryEmbedding
+          summaryEmbedding: sim.summaryEmbedding,
+          reasoning: fileAnalysis.reasoning || `Selected based on relevance score of ${sim.score.toFixed(2)}.`
         });
 
-        if (enough || selectedFiles.length >= 3) {
+        if (fileAnalysis.enough || selectedFiles.length >= 3) {
           break; // Stop if enough or limit reached
         }
       }
     }
 
     // If no files were selected, fall back to the top result
-    const finalSources = selectedFiles.length > 0 
+    const finalSources: RetrievedSource[] = selectedFiles.length > 0 
       ? selectedFiles 
       : [{
           url: sortedSims[0].url,
           score: sortedSims[0].score,
           codeSummary: sortedSims[0].codeSummary,
-          summaryEmbedding: sortedSims[0].summaryEmbedding
+          summaryEmbedding: sortedSims[0].summaryEmbedding,
+          reasoning: `Selected as the most relevant file with a high relevance score of ${sortedSims[0].score.toFixed(2)}.`
         }];
+
+    // Since we've ensured all sources have the reasoning property, we can directly use finalSources
+    const sourcesWithReasoning = finalSources;
 
     return NextResponse.json({
       success: true,
-      sources: finalSources
+      sources: sourcesWithReasoning,
+      reasoning: `Selected ${sourcesWithReasoning.length} relevant source${sourcesWithReasoning.length !== 1 ? 's' : ''} to answer the query.`
     });
   } catch (err) {
     console.error("Retrieve error:", err);
