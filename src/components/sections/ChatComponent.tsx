@@ -279,7 +279,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
         updatedMessages[retrievalIndex] = {
           ...updatedMessages[retrievalIndex],
           text: "🔍 Found relevant code files. Generating response...",
-          sourceFiles: sources.map((s: any) => ({
+          sourceFiles: sources.map((s: SourceFile) => ({
             url: s.url,
             score: s.score,
             codeSummary: s.codeSummary,
@@ -293,7 +293,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
       // Step 2: Get LLM response with the retrieved sources and reasoning
       const chatPayload = {
         message: chatInput,
-        sources: sources.map((s: any) => ({
+        sources: sources.map((s: SourceFile) => ({
           ...s,
           reasoning: s.reasoning || `Selected based on relevance score of ${s.score?.toFixed(2) || 'high'}.`
         })),
@@ -314,7 +314,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
         {
           sender: "bot" as const,
           text: chatResponse.data.response,
-          sourceFiles: sources.map((s: any) => ({
+          sourceFiles: sources.map((s: SourceFile) => ({
             url: s.url,
             score: s.score,
             codeSummary: s.codeSummary,
