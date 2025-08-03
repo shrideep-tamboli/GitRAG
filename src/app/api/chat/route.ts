@@ -20,8 +20,8 @@ interface RetrievedSource {
   url: string;
   score: number;
   codeSummary: string;
-  summaryEmbedding: number[] | null;
   reasoning?: string;
+  relevantCodeBlocks?: string[];
 }
 
 // --- Supabase setup ---
@@ -31,7 +31,7 @@ const supabase = createClient(
 );
 
 // --- Utility functions ---
-
+/* Function to fetch file content 
 async function fetchFileContent(url: string): Promise<string> {
   try {
     let resp;
@@ -52,7 +52,7 @@ async function fetchFileContent(url: string): Promise<string> {
     return "Unknown fetch error";
   }
 }
-
+*/
 
 
 export async function POST(request: Request) {
@@ -75,11 +75,13 @@ export async function POST(request: Request) {
       temperature: 0.2, // Lower temperature for more deterministic decisions
     });
 
-    // Build context string with reasoning and file content for each source
+    // Build context string with reasoning, relevant code blocks, and file content for each source
     const contextStr = await Promise.all(sources.map(async (source) => {
-      const fileContent = await fetchFileContent(source.url);
-      return `Reasoning: ${source.reasoning || 'Selected based on relevance score.'}\nFile Content:\n${fileContent}`;
-    })).then(results => results.join('\n\n' + '-'.repeat(80) + '\n\n'));
+      const relevantCodeBlocks = source.relevantCodeBlocks?.length 
+        ? `\n\nRelevant Code Snippets:\n${source.relevantCodeBlocks.map((block, i) => `--- Snippet ${i + 1} ---\n${block}`).join('\n\n')}`
+        : '';
+      return `Reasoning: ${source.reasoning || 'Selected based on relevance score.'}${relevantCodeBlocks}`;
+    })).then(results => results.join('\n\n' + '='.repeat(80) + '\n\n'));
 
     console.log("Sending to Gemini:", {
       message: msg,

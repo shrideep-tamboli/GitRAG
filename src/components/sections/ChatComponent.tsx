@@ -12,8 +12,8 @@ interface SourceFile {
   url: string;
   score: number;
   codeSummary?: string;
-  summaryEmbedding?: number[] | null;
   reasoning?: string;
+  relevantCodeBlocks?: string[];
 }
 
 interface ChatMessage {
@@ -270,7 +270,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
     try {
       // Step 1: Retrieve relevant sources
       const retrieveResponse = await axios.post("/api/retrieve", retrievePayload);
-      const { sources, reasoning: retrievalReasoning } = retrieveResponse.data;
+      const { sources, reasoning: retrievalReasoning, relevantCodeBlocks } = retrieveResponse.data;
       
       // Update the retrieval message with the found sources
       const updatedMessages = [...messages];
@@ -283,8 +283,8 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
             url: s.url,
             score: s.score,
             codeSummary: s.codeSummary,
-            summaryEmbedding: s.summaryEmbedding,
-            reasoning: s.reasoning
+            reasoning: s.reasoning,
+            relevantCodeBlocks: s.relevantCodeBlocks
           }))
         };
         setMessages(updatedMessages);
@@ -294,12 +294,11 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
       const chatPayload = {
         message: chatInput,
         sources: sources.map((s: SourceFile) => ({
-          ...s,
-          reasoning: s.reasoning || `Selected based on relevance score of ${s.score?.toFixed(2) || 'high'}.`
+          reasoning: s.reasoning || `Selected based on relevance score of ${s.score?.toFixed(2) || 'high'}.`,
+          relevantCodeBlocks: s.relevantCodeBlocks || [],
         })),
         threadId: internalThreadId,
         context: selectedContext,
-        retrievalReasoning: retrievalReasoning || 'The system selected these files based on relevance to your question.'
       };
       
       const chatResponse = await axios.post("/api/chat", chatPayload);
@@ -318,8 +317,8 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
             url: s.url,
             score: s.score,
             codeSummary: s.codeSummary,
-            summaryEmbedding: s.summaryEmbedding,
-            reasoning: s.reasoning
+            reasoning: s.reasoning,
+            relevantCodeBlocks: s.relevantCodeBlocks
           }))
         },
         ...prevMessages.filter(m => m.id !== retrievalId)

@@ -70,6 +70,7 @@ export interface RetrievedSource {
   codeSummary: string;
   summaryEmbedding: number[] | null;
   reasoning: string;  // Made this required since we always provide it
+  relevantCodeBlocks: string[]; // Array of relevant code blocks
 }
 
 export async function POST(request: Request) {
@@ -124,7 +125,12 @@ export async function POST(request: Request) {
       file: FileContext,
       query: string,
       previousContext: string
-    ): Promise<{ needed: boolean; enough: boolean; reasoning: string }> {
+    ): Promise<{ 
+      needed: boolean; 
+      enough: boolean; 
+      reasoning: string;
+      relevantCodeBlocks: string[];
+    }> {
       // Create the prompt with proper escaping of curly braces
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", `You are an AI assistant that determines if a file is needed to answer a user's query.
@@ -141,8 +147,11 @@ export async function POST(request: Request) {
         {{
           "needed": boolean,
           "enough": boolean,
-          "reasoning": string
-        }}`],
+          "reasoning": string,
+          "relevantCodeBlock": string[]
+        }}
+        
+        The relevantCodeBlock should be an array of code snippets (as strings) that are most relevant to answering the query. Each string should be a complete, self-contained code block that helps answer the user's question. If no code is relevant, return an empty array.`],
         ["human", `User query: {query}
         
         Previous context: {previousContext}
@@ -185,11 +194,19 @@ export async function POST(request: Request) {
           return {
             needed: result.needed !== false,
             enough: result.enough === true,
-            reasoning: result.reasoning || ''
+            reasoning: result.reasoning || '',
+            relevantCodeBlocks: Array.isArray(result.relevantCodeBlock) 
+              ? result.relevantCodeBlock 
+              : []
           };
         } catch {
           console.error('Failed to parse LLM response:', responseStr);
-          return { needed: true, enough: false, reasoning: '' };
+          return { 
+            needed: true, 
+            enough: false, 
+            reasoning: '',
+            relevantCodeBlocks: []
+          };
         }
     }
 
@@ -225,7 +242,8 @@ export async function POST(request: Request) {
           score: sim.score,
           codeSummary: sim.codeSummary,
           summaryEmbedding: sim.summaryEmbedding,
-          reasoning: fileAnalysis.reasoning || `Selected based on relevance score of ${sim.score.toFixed(2)}.`
+          reasoning: fileAnalysis.reasoning || `Selected based on relevance score of ${sim.score.toFixed(2)}.`,
+          relevantCodeBlocks: 'relevantCodeBlocks' in fileAnalysis ? fileAnalysis.relevantCodeBlocks : []
         });
 
         if (fileAnalysis.enough || selectedFiles.length >= 3) {
@@ -242,16 +260,21 @@ export async function POST(request: Request) {
           score: sortedSims[0].score,
           codeSummary: sortedSims[0].codeSummary,
           summaryEmbedding: sortedSims[0].summaryEmbedding,
-          reasoning: `Selected as the most relevant file with a high relevance score of ${sortedSims[0].score.toFixed(2)}.`
+          reasoning: `Selected as the most relevant file with a high relevance score of ${sortedSims[0].score.toFixed(2)}.`,
+          relevantCodeBlocks: []
         }];
 
-    // Since we've ensured all sources have the reasoning property, we can directly use finalSources
-    const sourcesWithReasoning = finalSources;
+    // Ensure all sources have the required fields
+    const sourcesWithReasoning = finalSources.map(source => ({
+      ...source,
+      relevantCodeBlocks: source.relevantCodeBlocks || []
+    }));
 
     return NextResponse.json({
       success: true,
       sources: sourcesWithReasoning,
-      reasoning: `Selected ${sourcesWithReasoning.length} relevant source${sourcesWithReasoning.length !== 1 ? 's' : ''} to answer the query.`
+      reasoning: `Selected ${sourcesWithReasoning.length} relevant source${sourcesWithReasoning.length !== 1 ? 's' : ''} to answer the query.`,
+      relevantCodeBlocks: sourcesWithReasoning.map(source => source.relevantCodeBlocks).flat()
     });
   } catch (err) {
     console.error("Retrieve error:", err);
