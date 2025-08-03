@@ -270,7 +270,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
     try {
       // Step 1: Retrieve relevant sources
       const retrieveResponse = await axios.post("/api/retrieve", retrievePayload);
-      const { sources, reasoning: retrievalReasoning, relevantCodeBlocks } = retrieveResponse.data;
+      const { sources } = retrieveResponse.data;
       
       // Update the retrieval message with the found sources
       const updatedMessages = [...messages];
