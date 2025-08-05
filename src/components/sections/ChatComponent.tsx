@@ -243,6 +243,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
     // Prepare the payload for retrieving relevant sources
     const retrievePayload = {
       message: chatInput,
+      threadId: internalThreadId,
       summaries: graphData.nodes.map((node) => ({
         codeSummary: node.codeSummary || "",
         summaryEmbedding: node.summaryEmbedding || null,
@@ -270,7 +271,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
     try {
       // Step 1: Retrieve relevant sources
       const retrieveResponse = await axios.post("/api/retrieve", retrievePayload);
-      const { sources } = retrieveResponse.data;
+      const { sources, finalQuery } = retrieveResponse.data;
       
       // Update the retrieval message with the found sources
       const updatedMessages = [...messages];
@@ -292,8 +293,10 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
       
       // Step 2: Get LLM response with the retrieved sources and reasoning
       const chatPayload = {
-        message: chatInput,
+        message: finalQuery || chatInput, // Use the enhanced query if available
+        originalMessage: chatInput, // Keep original message for reference
         sources: sources.map((s: SourceFile) => ({
+          url: s.url,
           reasoning: s.reasoning || `Selected based on relevance score of ${s.score?.toFixed(2) || 'high'}.`,
           relevantCodeBlocks: s.relevantCodeBlocks || [],
         })),

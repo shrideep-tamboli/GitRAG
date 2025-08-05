@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies as nextCookies } from "next/headers";
 import { v4 as uuidv4 } from "uuid";
 import Database from "better-sqlite3";
 
@@ -24,10 +25,20 @@ interface RetrievedSource {
 }
 
 // --- Supabase setup ---
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const createClient = async () => {
+  const cookieStore = await nextCookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+};
 
 // --- Utility functions ---
 /* Function to fetch file content 
@@ -57,9 +68,27 @@ async function fetchFileContent(url: string): Promise<string> {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const msg = body.message as string;
-    const sources = body.sources as RetrievedSource[];
-    const threadId = body.threadId as string | undefined;
+    const { 
+      message: msg, 
+      originalMessage,
+      sources = [], 
+      threadId,
+    } = body;
+    const supabase = await createClient();
+
+    // 1) Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) {
+      console.error('Error getting user:', userError);
+      return NextResponse.json(
+        { success: false, message: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Determine if we're using an enhanced query
+    const isEnhancedQuery = !!originalMessage && originalMessage !== msg;
 
     if (!sources || !Array.isArray(sources) || sources.length === 0) {
       throw new Error("No sources provided");
@@ -75,12 +104,12 @@ export async function POST(request: Request) {
     });
 
     // Build context string with reasoning, relevant code blocks, and file content for each source
-    const contextStr = await Promise.all(sources.map(async (source) => {
+    const contextStr = await Promise.all(sources.map(async (source: RetrievedSource) => {
       const relevantCodeBlocks = source.relevantCodeBlocks?.length 
-        ? `\n\nRelevant Code Snippets:\n${source.relevantCodeBlocks.map((block, i) => `--- Snippet ${i + 1} ---\n${block}`).join('\n\n')}`
+        ? `\n\nRelevant Code Snippets:\n${source.relevantCodeBlocks.map((block: string, i: number) => `--- Snippet ${i + 1} ---\n${block}`).join('\n\n')}`
         : '';
       return `Reasoning: ${source.reasoning || 'Selected based on relevance score.'}${relevantCodeBlocks}`;
-    })).then(results => results.join('\n\n' + '='.repeat(80) + '\n\n'));
+    })).then((results: string[]) => results.join('\n\n' + '='.repeat(80) + '\n\n'));
 
     console.log("Sending to Gemini:", {
       message: msg,
@@ -127,8 +156,10 @@ export async function POST(request: Request) {
       .addEdge("model", END)
       .compile({ checkpointer });
 
-    // 9) Invoke with a stable threadId
-    const finalThreadId = threadId || uuidv4();
+    // 9) Generate a proper UUID for the thread if one doesn't exist
+    const finalThreadId = threadId?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || uuidv4();
+    
+    // 10) Invoke with the stable threadId and the appropriate message (enhanced or original)
     const result = await graph.invoke(
       { messages: [new HumanMessage(msg)] },
       { configurable: { thread_id: finalThreadId } }
@@ -136,13 +167,35 @@ export async function POST(request: Request) {
     const assistantMsg = result.messages.at(-1)!.content;
 
     // Persist the final turn
-    await supabase.from("chat_data").insert({
-      user_query: msg,
-      bot_response: assistantMsg,
-      context_urls: sources.map((s) => s.url),
-      similarity_scores: sources.map((s) => ({ url: s.url, score: s.score })),
-      thread_id: finalThreadId,
-    });
+    try {
+      console.log('Attempting to save to chat_data:', {
+        thread_id: finalThreadId,
+        user_query: msg,
+        has_bot_response: !!assistantMsg,
+        sources_count: sources.length
+      });
+      
+      const { data, error } = await supabase
+        .from('chat_data')
+        .insert({
+          user_query: isEnhancedQuery ? originalMessage : msg,
+          enhanced_query: isEnhancedQuery ? msg : null,
+          bot_response: assistantMsg,
+          context_urls: sources.map((s) => s.url),
+          similarity_scores: sources.map((s) => ({ url: s.url, score: s.score })),
+          thread_id: finalThreadId,
+          email: user?.email || null,
+        })
+        .select();
+
+      if (error) {
+        console.error('Error saving to Supabase:', error);
+      } else {
+        console.log('Successfully saved to chat_data:', data);
+      }
+    } catch (e) {
+      console.error('Exception while saving to Supabase:', e);
+    }
 
     // Return the response
     return NextResponse.json({
