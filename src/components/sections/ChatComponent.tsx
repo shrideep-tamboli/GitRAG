@@ -3,6 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { Loader2, Send, X, Copy } from 'lucide-react'
 import axios from "axios"
+
+interface FrequencyItem {
+  url: string;
+  frequency: number;
+}
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Highlight, themes } from 'prism-react-renderer'
@@ -45,7 +50,8 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
 
   const [chatInput, setChatInput] = useState("")
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [urlFrequencies, setUrlFrequencies] = useState<Record<string, number>>({});
   const [isTyping, setIsTyping] = useState(false)
   const messagesStartRef = useRef<HTMLDivElement>(null)
   const [, setError] = useState("");
@@ -249,6 +255,11 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
         summaryEmbedding: node.summaryEmbedding || null,
         url: node.id,
       })),
+      // Include the current frequency list in the payload
+      urlFrequencyList: Object.entries(urlFrequencies).map(([url, frequency]) => ({
+        url,
+        frequency
+      })).sort((a, b) => b.frequency - a.frequency)
     };
   
     // Add user message to chat
@@ -272,6 +283,23 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
       // Step 1: Retrieve relevant sources
       const retrieveResponse = await axios.post("/api/retrieve", retrievePayload);
       const { sources, finalQuery } = retrieveResponse.data;
+      
+      // Update the URL frequencies with the new sources
+      const newFrequencies = { ...urlFrequencies };
+      sources.forEach((source: SourceFile) => {
+        newFrequencies[source.url] = (newFrequencies[source.url] || 0) + 1;
+      });
+      setUrlFrequencies(newFrequencies);
+      
+      // Convert frequencies to a sorted list
+      const urlFrequencyList: FrequencyItem[] = Object.entries(newFrequencies)
+        .map(([url, frequency]) => ({
+          url,
+          frequency: Number(frequency)
+        }))
+        .sort((a, b) => b.frequency - a.frequency);
+      
+      console.log('Cumulative URL Frequencies (sorted by frequency):', urlFrequencyList);
       
       // Update the retrieval message with the found sources
       const updatedMessages = [...messages];

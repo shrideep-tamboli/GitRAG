@@ -5,6 +5,14 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+// Define schema for file relevance check
+const fileRelevanceSchema = z.object({
+  needed: z.boolean().describe("Whether this file is needed to answer the query"),
+  enough: z.boolean().describe("Whether this file alone is sufficient to fully answer the query"),
+  reasoning: z.string().describe("Explanation of why the file is needed/sufficient"),
+  relevantCodeBlock: z.array(z.string()).describe("Relevant code blocks from the file")
+});
+
 // Initialize Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -81,16 +89,24 @@ export interface RetrievedSource {
   relevantCodeBlocks: string[]; // Array of relevant code blocks
 }
 
+interface RetrieveRequest {
+  threadId?: string;
+  message: string;
+  summaries: Array<{
+    codeSummary: string;
+    summaryEmbedding: number[] | null;
+    url: string;
+  }>;
+  urlFrequencyList?: Array<{
+    url: string;
+    frequency: number;
+  }>;
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const threadId = body.threadId as string | undefined;
-    const message = body.message as string;
-    const summaries = body.summaries as Array<{
-      codeSummary: string;
-      summaryEmbedding: number[] | null;
-      url: string;
-    }>;
+    const body: RetrieveRequest = await request.json();
+    const { threadId, message, summaries, urlFrequencyList = [] } = body;
 
             // Define schema for context check response
     const contextCheckSchema = z.object({
@@ -273,47 +289,201 @@ export async function POST(request: Request) {
       console.log('Found context URLs from previous messages:', contextUrls);
     }
 
-    // 5) Compute similarity scores, prioritizing context URLs if available
-    let sims;
+    // 5) Two-phase retrieval:
+    // Phase 1: First check files from urlFrequencyList if available
+    const phase1Results: Array<{
+      url: string;
+      codeSummary: string;
+      summaryEmbedding: number[] | null;
+      score: number;
+      isFromContext: boolean;
+      isFromFrequencyList: boolean;
+      needed: boolean;
+      enough: boolean;
+      reasoning: string;
+      relevantCodeBlocks: string[];
+    }> = [];
     
-    if (contextUrls.length > 0) {
-      console.log('Prioritizing search in context URLs');
-      // First, search only within context URLs
-      const contextUrlSims = summaries
-        .filter(s => s.summaryEmbedding && contextUrls.some(url => s.url.includes(url)))
-        .map(s => ({
-          ...s,
-          score: cosineSimilarity(queryEmbedding, s.summaryEmbedding!),
-          isFromContext: true
-        }));
+    // Get all summaries with their cosine similarity scores
+    const allSummariesWithScores = summaries
+      .filter(s => s.summaryEmbedding)
+      .map(s => ({
+        ...s,
+        score: cosineSimilarity(queryEmbedding, s.summaryEmbedding!)
+      }))
+      .sort((a, b) => b.score - a.score);
+    
+    // If we have cached files, process those files first
+    if (urlFrequencyList?.length > 0) {
+      console.log('Phase 1: Processing files from cache');
+      const frequencyUrls = new Set(urlFrequencyList.map(item => item.url));
       
-      // Then search the rest of the summaries
-      const otherSims = summaries
-        .filter(s => s.summaryEmbedding && !contextUrls.some(url => s.url.includes(url)))
-        .map(s => ({
-          ...s,
-          score: cosineSimilarity(queryEmbedding, s.summaryEmbedding!),
-          isFromContext: false
-        }));
+      // Get and sort cached files by cosine similarity
+      const frequencySummaries = allSummariesWithScores
+        .filter(s => Array.from(frequencyUrls).some(url => s.url.includes(url)))
+        .sort((a, b) => b.score - a.score);
       
-      // Combine and sort by score
-      sims = [...contextUrlSims, ...otherSims];
-    } else {
-      // If no context URLs, search all summaries
-      sims = summaries
-        .filter((s) => s.summaryEmbedding)
-        .map((s) => ({
-          ...s,
-          score: cosineSimilarity(queryEmbedding, s.summaryEmbedding!),
-          isFromContext: false
-        }));
+      console.log(`Found ${frequencySummaries.length} files from cache`);
+      
+      // Process each file in the frequency list to check if it should be used
+      for (const sim of frequencySummaries) {
+        const fileContent = await fetchFileContent(sim.url);
+        const fileContext: FileContext = {
+          filePath: sim.url.includes("/contents/") 
+            ? sim.url.split("/contents/")[1] 
+            : sim.url.split("/main/")[1] || sim.url,
+          fileContent,
+          codeSummary: sim.codeSummary,
+          score: sim.score,
+          url: sim.url
+        };
+        
+        const fileAnalysis = await shouldUseFile(
+          fileContext,
+          message,
+          phase1Results.map(f => f.codeSummary).join('\n\n')
+        );
+        
+        const result = {
+          ...sim,
+          isFromContext: contextUrls.some(u => sim.url.includes(u)),
+          isFromFrequencyList: true,
+          needed: fileAnalysis.needed,
+          enough: fileAnalysis.enough,
+          reasoning: fileAnalysis.reasoning,
+          relevantCodeBlocks: fileAnalysis.relevantCodeBlocks || []
+        };
+        
+        phase1Results.push(result);
+        
+        console.log(`File ${sim.url} - needed: ${result.needed}, enough: ${result.enough}`);
+        
+        // If we have enough context, we can stop early
+        if (result.enough) {
+          console.log('Found sufficient context in frequency list files');
+          break;
+        }
+      }
+      
+      // Check if any file in phase 1 had enough context
+      const hasEnoughInPhase1 = phase1Results.some(r => r.enough);
+      
+      // If we found files with enough context in phase 1, return those results
+      if (hasEnoughInPhase1) {
+        const sufficientResults = phase1Results.filter(r => r.needed);
+        console.log('Returning results from cache with sufficient context');
+        return NextResponse.json({
+          success: true,
+          sources: sufficientResults.map(r => ({
+            url: r.url,
+            score: r.score,
+            codeSummary: r.codeSummary,
+            summaryEmbedding: r.summaryEmbedding,
+            reasoning: r.reasoning,
+            relevantCodeBlocks: r.relevantCodeBlocks
+          })),
+          reasoning: `Found ${sufficientResults.length} relevant source(s) from cache with sufficient context.`,
+          relevantCodeBlocks: sufficientResults.flatMap(r => r.relevantCodeBlocks),
+          finalQuery: searchQuery
+        });
+      } else {
+        console.log('No files in cache had enough context, proceeding to Phase 2');
+      }
+    }
+    
+    // Phase 2: Fall back to regular similarity search for remaining files
+    console.log('Phase 2: Falling back to regular similarity search');
+    
+    // Get files that weren't already checked in phase 1
+    // But include files that were marked as needed (even if not enough) in phase 1
+    const checkedUrls = new Set(phase1Results.filter(r => !r.needed).map(r => r.url));
+    const remainingSummaries = [
+      ...phase1Results.filter(r => r.needed),
+      ...allSummariesWithScores.filter(s => !checkedUrls.has(s.url))
+    ].sort((a, b) => b.score - a.score);
+    
+    // Process remaining files in order of similarity until we find one with enough context
+    const phase2Results: typeof phase1Results = [];
+    
+    for (const sim of remainingSummaries) {
+      const fileContent = await fetchFileContent(sim.url);
+      const fileContext: FileContext = {
+        filePath: sim.url.includes("/contents/") 
+          ? sim.url.split("/contents/")[1] 
+          : sim.url.split("/main/")[1] || sim.url,
+        fileContent,
+        codeSummary: sim.codeSummary,
+        score: sim.score,
+        url: sim.url
+      };
+      
+      const fileAnalysis = await shouldUseFile(
+        fileContext,
+        message,
+        phase2Results.map(f => f.codeSummary).join('\n\n')
+      );
+      
+      if (fileAnalysis.needed) {
+        const hasEnoughContext = fileAnalysis.enough;
+        const result = {
+          ...sim,
+          isFromContext: contextUrls.some(u => sim.url.includes(u)),
+          isFromFrequencyList: false,
+          needed: true,
+          enough: hasEnoughContext,
+          reasoning: fileAnalysis.reasoning,
+          relevantCodeBlocks: fileAnalysis.relevantCodeBlocks || []
+        };
+        
+        phase2Results.push(result);
+        console.log(`File ${sim.url} - needed: true, enough: ${result.enough}`);
+        
+        // Stop as soon as we find a file with enough context
+        if (hasEnoughContext) {
+          console.log('Found file with sufficient context, stopping Phase 2');
+          break;
+        }
+        
+        // Safety limit: don't process more than 10 files even if none are sufficient
+        if (phase2Results.length >= 10) {
+          console.log('Reached maximum number of files to process in Phase 2');
+          break;
+        }
+      }
+    }
+    
+    // Combine phase 1 and phase 2 results, prioritizing phase 2
+    const allResults = [...phase1Results, ...phase2Results]
+      .filter(r => r.needed)
+      .sort((a, b) => b.score - a.score);
+      
+    // If we have any results, return them
+    if (allResults.length > 0) {
+      return NextResponse.json({
+        success: true,
+        sources: allResults.map(r => ({
+          url: r.url,
+          score: r.score,
+          codeSummary: r.codeSummary,
+          summaryEmbedding: r.summaryEmbedding,
+          reasoning: r.reasoning,
+          relevantCodeBlocks: r.relevantCodeBlocks
+        })),
+        reasoning: `Found ${allResults.length} relevant source(s).`,
+        relevantCodeBlocks: allResults.flatMap(r => r.relevantCodeBlocks),
+        finalQuery: searchQuery
+      });
     }
 
-    // Sort the results in descending order based on the score
-    sims.sort((a, b) => b.score - a.score);
-
-    // Sort by score and take top 6
-    const sortedSims = [...sims].sort((a, b) => b.score - a.score).slice(0, 3);
+    // If we get here, no relevant files were found
+    console.log('No relevant files found for the query');
+    return NextResponse.json({
+      success: true,
+      sources: [],
+      reasoning: 'No relevant files found for the query.',
+      relevantCodeBlocks: [],
+      finalQuery: searchQuery
+    });
 
     // Function to fetch file content
     async function fetchFileContent(url: string): Promise<string> {
@@ -334,14 +504,6 @@ export async function POST(request: Request) {
         return "";
       }
     }
-
-    // Define schema for file relevance check
-    const fileRelevanceSchema = z.object({
-      needed: z.boolean().describe("Whether this file is needed to answer the query"),
-      enough: z.boolean().describe("Whether this file alone is sufficient to fully answer the query"),
-      reasoning: z.string().describe("Explanation of why the file is needed/sufficient"),
-      relevantCodeBlock: z.array(z.string()).describe("Relevant code blocks from the file")
-    });
 
     // Function to determine if a file is needed and sufficient
     async function shouldUseFile(
@@ -420,73 +582,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Process files in order of relevance
-    const selectedFiles: RetrievedSource[] = [];
-    for (const sim of sortedSims) {
-      if (selectedFiles.length >= 3) break;
-
-      const fileContent = await fetchFileContent(sim.url);
-      const fileContext: FileContext = {
-        filePath: sim.url.includes("/contents/")
-          ? sim.url.split("/contents/")[1]
-          : sim.url.split("/main/")[1] || sim.url,
-        fileContent,
-        codeSummary: sim.codeSummary,
-        score: sim.score,
-        url: sim.url
-      };
-
-      const previousContext = selectedFiles
-        .map(f => `File: ${f.url.split('/').pop()}\nSummary: ${f.codeSummary}`)
-        .join('\n\n');
-
-      const fileAnalysis = await shouldUseFile(
-        fileContext,
-        body.message,
-        previousContext
-      );
-
-      if (fileAnalysis.needed) {
-        selectedFiles.push({
-          url: sim.url,
-          score: sim.score,
-          codeSummary: sim.codeSummary,
-          summaryEmbedding: sim.summaryEmbedding,
-          reasoning: fileAnalysis.reasoning || `Selected based on relevance score of ${sim.score.toFixed(2)}.`,
-          relevantCodeBlocks: 'relevantCodeBlocks' in fileAnalysis ? fileAnalysis.relevantCodeBlocks : []
-        });
-
-        if (fileAnalysis.enough || selectedFiles.length >= 3) {
-          break; // Stop if enough or limit reached
-        }
-      }
-    }
-
-    // If no files were selected, fall back to the top result
-    const finalSources: RetrievedSource[] = selectedFiles.length > 0 
-      ? selectedFiles 
-      : [{
-          url: sortedSims[0].url,
-          score: sortedSims[0].score,
-          codeSummary: sortedSims[0].codeSummary,
-          summaryEmbedding: sortedSims[0].summaryEmbedding,
-          reasoning: `Selected as the most relevant file with a high relevance score of ${sortedSims[0].score.toFixed(2)}.`,
-          relevantCodeBlocks: []
-        }];
-
-    // Ensure all sources have the required fields
-    const sourcesWithReasoning = finalSources.map(source => ({
-      ...source,
-      relevantCodeBlocks: source.relevantCodeBlocks || []
-    }));
-
-    return NextResponse.json({
-      success: true,
-      sources: sourcesWithReasoning,
-      reasoning: `Selected ${sourcesWithReasoning.length} relevant source${sourcesWithReasoning.length !== 1 ? 's' : ''} to answer the query.`,
-      relevantCodeBlocks: sourcesWithReasoning.map(source => source.relevantCodeBlocks).flat(),
-      finalQuery: searchQuery // Include the final query (original or rewritten)
-    });
+    // This code is no longer needed as we've moved the logic above
   } catch (err) {
     console.error("Retrieve error:", err);
     return NextResponse.json(
