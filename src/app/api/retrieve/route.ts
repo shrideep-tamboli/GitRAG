@@ -7,10 +7,10 @@ import { z } from "zod";
 
 // Define schema for file relevance check
 const fileRelevanceSchema = z.object({
-  needed: z.boolean().describe("Whether this file is needed to answer the query"),
+  needed: z.boolean().describe("Only true if the file is directly relevant to the query"),
   enough: z.boolean().describe("Whether this file alone is sufficient to fully answer the query"),
-  reasoning: z.string().describe("Explanation of why the file is needed/sufficient"),
-  relevantCodeBlock: z.array(z.string()).describe("Relevant code blocks from the file")
+  reasoning: z.string().describe("Detailed explanation of the decision, including relevance to the query"),
+  relevantCodeBlock: z.array(z.string()).describe("Only specific code blocks directly relevant to the query")
 });
 
 // Initialize Supabase client
@@ -341,7 +341,19 @@ export async function POST(request: Request) {
         const fileAnalysis = await shouldUseFile(
           fileContext,
           message,
-          phase1Results.map(f => f.codeSummary).join('\n\n')
+          phase1Results
+            .filter(f => f.needed)
+            .map(f => {
+              const { ...relevantData } = f;
+              return `File: ${f.url}\n` +
+                Object.entries(relevantData)
+                  .filter(([key, value]) => value !== undefined && value !== null && value !== '' && !Array.isArray(value) || (Array.isArray(value) && value.length > 0))
+                  .map(([key, value]) => 
+                    `${key}: ${Array.isArray(value) ? value.join('\n') : value}`
+                  )
+                  .join('\n');
+            })
+            .join('\n\n')
         );
         
         const result = {
@@ -355,6 +367,7 @@ export async function POST(request: Request) {
         };
         
         phase1Results.push(result);
+        console.log(`Continous Context`, phase1Results)
         
         console.log(`File ${sim.url} - needed: ${result.needed}, enough: ${result.enough}`);
         
@@ -402,53 +415,75 @@ export async function POST(request: Request) {
       ...allSummariesWithScores.filter(s => !checkedUrls.has(s.url))
     ].sort((a, b) => b.score - a.score);
     
-    // Process remaining files in order of similarity until we find one with enough context
+    // Process files in batches of 3, continuing until a batch has all unneeded files
     const phase2Results: typeof phase1Results = [];
+    const BATCH_SIZE = 3;
     
-    for (const sim of remainingSummaries) {
-      const fileContent = await fetchFileContent(sim.url);
-      const fileContext: FileContext = {
-        filePath: sim.url.includes("/contents/") 
-          ? sim.url.split("/contents/")[1] 
-          : sim.url.split("/main/")[1] || sim.url,
-        fileContent,
-        codeSummary: sim.codeSummary,
-        score: sim.score,
-        url: sim.url
-      };
+    // Process files in batches
+    for (let i = 0; i < remainingSummaries.length; i += BATCH_SIZE) {
+      const batch = remainingSummaries.slice(i, i + BATCH_SIZE);
+      console.log(`Processing batch ${i / BATCH_SIZE + 1} with ${batch.length} files`);
       
-      const fileAnalysis = await shouldUseFile(
-        fileContext,
-        message,
-        phase2Results.map(f => f.codeSummary).join('\n\n')
-      );
-      
-      if (fileAnalysis.needed) {
-        const hasEnoughContext = fileAnalysis.enough;
-        const result = {
-          ...sim,
-          isFromContext: contextUrls.some(u => sim.url.includes(u)),
-          isFromFrequencyList: false,
-          needed: true,
-          enough: hasEnoughContext,
-          reasoning: fileAnalysis.reasoning,
-          relevantCodeBlocks: fileAnalysis.relevantCodeBlocks || []
+      // Process all files in the current batch in parallel
+      const batchPromises = batch.map(async (sim) => {
+        const fileContent = await fetchFileContent(sim.url);
+        const fileContext: FileContext = {
+          filePath: sim.url.includes("/contents/") 
+            ? sim.url.split("/contents/")[1] 
+            : sim.url.split("/main/")[1] || sim.url,
+          fileContent,
+          codeSummary: sim.codeSummary,
+          score: sim.score,
+          url: sim.url
         };
         
-        phase2Results.push(result);
-        console.log(`File ${sim.url} - needed: true, enough: ${result.enough}`);
-        
-        // Stop as soon as we find a file with enough context
-        if (hasEnoughContext) {
-          console.log('Found file with sufficient context, stopping Phase 2');
-          break;
+        return shouldUseFile(
+          fileContext,
+          message,
+          phase2Results.map(f => f.codeSummary).join('\n\n')
+        ).then(fileAnalysis => ({
+          sim,
+          analysis: fileAnalysis
+        }));
+      });
+      
+      // Wait for all files in the batch to be processed
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Process the results of the current batch
+      let hasNeededFileInBatch = false;
+      
+      for (const { sim, analysis } of batchResults) {
+        if (analysis.needed) {
+          hasNeededFileInBatch = true;
+          
+          const result = {
+            ...sim,
+            isFromContext: contextUrls.some(u => sim.url.includes(u)),
+            isFromFrequencyList: false,
+            needed: true,
+            enough: analysis.enough,
+            reasoning: analysis.reasoning,
+            relevantCodeBlocks: analysis.relevantCodeBlocks || []
+          };
+          
+          phase2Results.push(result);
+          console.log(`File ${sim.url} - needed: true, enough: ${result.enough}`);
+        } else {
+          console.log(`File ${sim.url} - needed: false`);
         }
-        
-        // Safety limit: don't process more than 10 files even if none are sufficient
-        if (phase2Results.length >= 10) {
-          console.log('Reached maximum number of files to process in Phase 2');
-          break;
-        }
+      }
+      
+      // If no files in this batch were needed, we can stop
+      if (!hasNeededFileInBatch) {
+        console.log('No files in this batch were needed, stopping Phase 2');
+        break;
+      }
+      
+      // Safety limit: don't process more than 30 files total (10 batches of 3)
+      if (phase2Results.length >= 30) {
+        console.log('Reached maximum number of files to process in Phase 2');
+        break;
       }
     }
     
@@ -471,7 +506,7 @@ export async function POST(request: Request) {
         })),
         reasoning: `Found ${allResults.length} relevant source(s).`,
         relevantCodeBlocks: allResults.flatMap(r => r.relevantCodeBlocks),
-        finalQuery: searchQuery
+        finalQuery: message // Using the original message as the final query
       });
     }
 
@@ -519,24 +554,29 @@ export async function POST(request: Request) {
       // Create the prompt
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", `You are an AI assistant that determines if a file is needed to answer a user's query.
-        You will be given:
-        1. The user's query
-        2. Previous context (if any)
-        3. A file's content and metadata
-
-        You must answer two questions:
-        1. Is this file needed to answer the query? (yes/no)
-        2. Is this file alone enough to fully answer the query? (yes/no)
-        
-        The relevantCodeBlock should be an array of code blocks that are most relevant to answering the query. Each string should be a complete, self-contained code block that helps answer the user's question. If no code is relevant, return an empty array.`],
+      
+        INSTRUCTIONS:
+        1. Focus ONLY on the current file's content. Do not consider other files.
+        2. A file should ONLY be marked as "needed" if it DIRECTLY contains code that answers the query.
+        3. A file is NOT needed if:
+           - It doesn't contain any code related to the query
+           - It only contains references to other files
+           - It's a configuration or utility file not directly related to the query
+           - The connection to the query is too general or tangential
+      
+        For each file, provide:
+        1. needed: true ONLY if this specific file's code directly answers the query
+        2. enough: true ONLY if this file alone completely answers the query
+        3. reasoning: Explain how THIS FILE's code answers the query. Do not mention other files.
+        4. relevantCodeBlock: Only specific code blocks from THIS FILE that directly answer the query
+      
+        BE STRICT IN YOUR EVALUATION. When in doubt, mark as not needed.`],
         ["human", `User query: {query}
-        
-        Previous context: {previousContext}
         
         File path: {filePath}
         File summary: {fileSummary}
         
-        File content (first 2000 chars): {fileContent}`]
+        File content: {fileContent}`]
       ]);
 
       // Create a structured LLM for file relevance check
@@ -551,7 +591,7 @@ export async function POST(request: Request) {
           previousContext: previousContext || 'None',
           filePath: file.filePath,
           fileSummary: file.codeSummary,
-          fileContent: file.fileContent.substring(0, 2000)
+          fileContent: file.fileContent
         });
 
         // Get the structured response
