@@ -347,7 +347,7 @@ export async function POST(request: Request) {
               const { ...relevantData } = f;
               return `File: ${f.url}\n` +
                 Object.entries(relevantData)
-                  .filter(([key, value]) => value !== undefined && value !== null && value !== '' && !Array.isArray(value) || (Array.isArray(value) && value.length > 0))
+                  .filter(([value]) => value !== undefined && value !== null && value !== '' && !Array.isArray(value) || (Array.isArray(value) && value.length > 0))
                   .map(([key, value]) => 
                     `${key}: ${Array.isArray(value) ? value.join('\n') : value}`
                   )
