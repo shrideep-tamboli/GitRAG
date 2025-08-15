@@ -15,23 +15,88 @@ import { useAuth } from '@/lib/AuthContext'
 import type { GraphData } from './KnowledgeGraph'
 interface SourceFile {
   url: string;
-  score: number;
+  shortUrl?: string;
+  score?: number;
   codeSummary?: string;
   reasoning?: string;
   relevantCodeBlocks?: string[];
 }
 
 interface ChatMessage {
-  sender: "user" | "bot"
-  text: string
-  id?: string
-  isRetrieving?: boolean
-  sourceFiles?: SourceFile[]
+  sender: "user" | "bot";
+  text: string;
+  id?: string;
+  isRetrieving?: boolean;
+  expanded?: boolean;
+  sourceFiles?: {
+    url: string;
+    shortUrl?: string;
+    score?: number;
+    codeSummary?: string;
+    reasoning?: string;
+    relevantCodeBlocks?: string[];
+  }[];
+  thoughtDuration?: string; // seconds string like "3.2"
+  finalAnswer?: string;
+  sourcesList?: {
+    url: string;
+    shortUrl?: string;
+  }[];
 }
+
 
 interface ChatComponentProps {
   threadId?: string;
 }
+
+function toShortUrl(raw: string) {
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.toLowerCase();
+    const p = u.pathname.split('/'); // ['', owner, repo, branch, ...] for raw.githubusercontent
+    if (host === 'raw.githubusercontent.com' && p.length >= 4) {
+      // raw.githubusercontent.com/{owner}/{repo}/{branch}/path...
+      const repo = p[2];
+      const branch = p[3];
+      const rest = p.slice(4).join('/');
+      return `${repo}/${branch}/${rest}`;
+    }
+
+    if (host === 'github.com') {
+      // github.com/{owner}/{repo}/blob/{branch}/path...
+      const blobIdx = p.indexOf('blob');
+      if (blobIdx > -1 && p.length > blobIdx + 2) {
+        const repo = p[2];
+        const branch = p[blobIdx + 1];
+        const rest = p.slice(blobIdx + 2).join('/');
+        return `${repo}/${branch}/${rest}`;
+      }
+    }
+
+    if (host === 'api.github.com') {
+      // /repos/{owner}/{repo}/contents/{path...}
+      const reposIdx = p.indexOf('repos');
+      const contentsIdx = p.indexOf('contents');
+      if (reposIdx > -1 && p.length > reposIdx + 2) {
+        const repoName = p[reposIdx + 2]; // repo
+        if (contentsIdx > -1) {
+          const filePath = p.slice(contentsIdx + 1).join('/');
+          return `${repoName}/main/${filePath}`;
+        }
+        return repoName;
+      }
+    }
+
+    // fallback: return last up-to-5 path segments or full path if short
+    const segs = p.filter(Boolean);
+    if (segs.length >= 3) return segs.slice(-5).join('/');
+    return u.pathname.replace(/^\//, '');
+  } catch (e) {
+    // invalid url — return original
+    return raw;
+  }
+}
+
 
 export default function ChatComponent({ threadId: propThreadId }: ChatComponentProps) {
   const [internalThreadId, setInternalThreadId] = useState(propThreadId || `thread_${Math.random().toString(36).substr(2, 9)}`)
@@ -243,10 +308,11 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
       }
     }, [fetchGraphData, user?.id])
 
+  // inside ChatComponent.tsx — replace the handleSend function with this:
+
   const handleSend = async () => {
     if (!chatInput.trim()) return;
-
-    // Prepare the payload for retrieving relevant sources
+  
     const retrievePayload = {
       message: chatInput,
       threadId: internalThreadId,
@@ -255,121 +321,218 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
         summaryEmbedding: node.summaryEmbedding || null,
         url: node.id,
       })),
-      // Include the current frequency list in the payload
-      urlFrequencyList: Object.entries(urlFrequencies).map(([url, frequency]) => ({
-        url,
-        frequency
-      })).sort((a, b) => b.frequency - a.frequency)
+      urlFrequencyList: Object.entries(urlFrequencies)
+        .map(([url, frequency]) => ({ url, frequency }))
+        .sort((a, b) => b.frequency - a.frequency),
     };
   
-    // Add user message to chat
+    // Add user message
     const userMessage: ChatMessage = { sender: "user", text: chatInput };
-    setMessages(prev => [userMessage, ...prev]);
+    setMessages((prev) => [userMessage, ...prev]);
     setChatInput("");
-    
-    // Show loading state for retrieval
+  
+    // Single retrieval message (collapsible)
     const retrievalId = Date.now().toString();
-    setMessages(prev => [
-      { 
-        sender: "bot", 
-        text: "🔍 Retrieving relevant code files...",
+    const retrieveStart = Date.now();
+    setMessages((prev) => [
+      {
+        sender: "bot",
+        text: "",
         isRetrieving: true,
-        id: retrievalId
+        id: retrievalId,
+        expanded: true,
+        sourceFiles: [],
       },
-      ...prev
+      ...prev,
     ]);
-    
+  
     try {
-      // Step 1: Retrieve relevant sources
-      const retrieveResponse = await axios.post("/api/retrieve", retrievePayload);
-      const { sources, finalQuery } = retrieveResponse.data;
-      
-      // Update the URL frequencies with the new sources
-      const newFrequencies = { ...urlFrequencies };
-      sources.forEach((source: SourceFile) => {
-        newFrequencies[source.url] = (newFrequencies[source.url] || 0) + 1;
+      const res = await fetch("/api/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(retrievePayload),
       });
-      setUrlFrequencies(newFrequencies);
-      
-      // Convert frequencies to a sorted list
-      const urlFrequencyList: FrequencyItem[] = Object.entries(newFrequencies)
-        .map(([url, frequency]) => ({
-          url,
-          frequency: Number(frequency)
-        }))
-        .sort((a, b) => b.frequency - a.frequency);
-      
-      console.log('Cumulative URL Frequencies (sorted by frequency):', urlFrequencyList);
-      
-      // Update the retrieval message with the found sources
-      const updatedMessages = [...messages];
-      const retrievalIndex = updatedMessages.findIndex(m => m.id === retrievalId);
-      if (retrievalIndex !== -1) {
-        updatedMessages[retrievalIndex] = {
-          ...updatedMessages[retrievalIndex],
-          text: "🔍 Found relevant code files. Generating response...",
-          sourceFiles: sources.map((s: SourceFile) => ({
-            url: s.url,
-            score: s.score,
-            codeSummary: s.codeSummary,
-            reasoning: s.reasoning,
-            relevantCodeBlocks: s.relevantCodeBlocks
-          }))
-        };
-        setMessages(updatedMessages);
+  
+      if (!res.ok || !res.body) {
+        throw new Error(`Retrieve failed: ${res.status} ${res.statusText}`);
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      // Track all seen files to prevent duplicates
+      const seenFiles = new Map<string, boolean>();
       
-      // Step 2: Get LLM response with the retrieved sources and reasoning
-      const chatPayload = {
-        message: finalQuery || chatInput, // Use the enhanced query if available
-        originalMessage: chatInput, // Keep original message for reference
-        sources: sources.map((s: SourceFile) => ({
-          url: s.url,
-          reasoning: s.reasoning || `Selected based on relevance score of ${s.score?.toFixed(2) || 'high'}.`,
-          relevantCodeBlocks: s.relevantCodeBlocks || [],
-        })),
-        threadId: internalThreadId,
-        context: selectedContext,
+      const updateMessageWithSources = (sources: any[]) => {
+        if (!sources || !sources.length) return;
+        
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== retrievalId) return m;
+            
+            // Create a map of existing sources by URL
+            const existingSources = new Map(
+              (m.sourceFiles || []).map(s => [s.url, s])
+            );
+            
+            // Add or update sources from the batch
+            sources.forEach(source => {
+              if (!source?.url || seenFiles.has(source.url)) return;
+              
+              seenFiles.set(source.url, true);
+              existingSources.set(source.url, {
+                url: source.url,
+                shortUrl: toShortUrl(source.url),
+                score: source.score ?? 0,
+                codeSummary: source.codeSummary,
+                reasoning: source.reasoning,
+                relevantCodeBlocks: source.relevantCodeBlocks || [],
+              });
+            });
+            
+            return {
+              ...m,
+              sourceFiles: Array.from(existingSources.values())
+            };
+          })
+        );
       };
-      
-      const chatResponse = await axios.post("/api/chat", chatPayload);
-      
-      // Update the threadId if a new one is returned
-      if (chatResponse.data.threadId && chatResponse.data.threadId !== internalThreadId) {
-        setInternalThreadId(chatResponse.data.threadId);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const raw of lines) {
+          if (!raw.trim()) continue;
+          try {
+            const obj = JSON.parse(raw);
+
+            if (obj.type === "batch") {
+              // Process batch of files
+              const d = obj.data;
+              if (d.results && d.results.length > 0) {
+                updateMessageWithSources(d.results);
+              }
+              
+              // If this is marked as a final batch with no results, we can stop early
+              if (d.isFinal) {
+                break;
+              }
+            } else if (obj.type === "final") {
+              const finalSources = obj.data.sources || [];
+              const finalQuery = obj.data.finalQuery || chatInput;
+              const retrieveDuration = (
+                (Date.now() - retrieveStart) /
+                1000
+              ).toFixed(1);
+  
+              setUrlFrequencies((prev) => {
+                const copy = { ...prev };
+                finalSources.forEach((s: any) => {
+                  copy[s.url] = (copy[s.url] || 0) + 1;
+                });
+                return copy;
+              });
+  
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === retrievalId
+                    ? {
+                        ...m,
+                        isRetrieving: false,
+                        thoughtDuration: retrieveDuration,
+                        sourceFiles: (m.sourceFiles || []).concat(
+                          finalSources.map((s: any) => ({
+                            url: s.url,
+                            shortUrl: toShortUrl(s.url),
+                            score: s.score,
+                            codeSummary: s.codeSummary,
+                            reasoning: s.reasoning,
+                            relevantCodeBlocks: s.relevantCodeBlocks || [],
+                          }))
+                        ),
+                      }
+                    : m
+                )
+              );
+  
+              const chatPayload = {
+                message: finalQuery || chatInput,
+                originalMessage: chatInput,
+                sources: finalSources.map((s: any) => ({
+                  url: s.url,
+                  reasoning:
+                    s.reasoning ||
+                    `Selected based on relevance score ${
+                      s.score?.toFixed?.(2) ?? ""
+                    }.`,
+                  relevantCodeBlocks: s.relevantCodeBlocks || [],
+                })),
+                threadId: internalThreadId,
+                context: selectedContext,
+              };
+  
+              const chatResp = await axios.post("/api/chat", chatPayload);
+  
+              if (
+                chatResp.data.threadId &&
+                chatResp.data.threadId !== internalThreadId
+              ) {
+                setInternalThreadId(chatResp.data.threadId);
+              }
+  
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === retrievalId
+                    ? {
+                        ...m,
+                        finalAnswer: chatResp.data.response,
+                        sourcesList: finalSources.map((s: any) => ({
+                          url: s.url,
+                          shortUrl: toShortUrl(s.url),
+                        })),
+                      }
+                    : m
+                )
+              );
+            } else if (obj.type === "error") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === retrievalId
+                    ? {
+                        ...m,
+                        text: `Error: ${
+                          obj.data?.message || "Unknown error"
+                        }`,
+                        isRetrieving: false,
+                      }
+                    : m
+                )
+              );
+            }
+          } catch (e) {
+            console.error("Stream parse error", e, raw);
+          }
+        }
       }
-      
-      // Replace the retrieval message with the final response
-      setMessages(prevMessages => [
-        {
-          sender: "bot" as const,
-          text: chatResponse.data.response,
-          sourceFiles: sources.map((s: SourceFile) => ({
-            url: s.url,
-            score: s.score,
-            codeSummary: s.codeSummary,
-            reasoning: s.reasoning,
-            relevantCodeBlocks: s.relevantCodeBlocks
-          }))
-        },
-        ...prevMessages.filter(m => m.id !== retrievalId)
-      ]);
-      
-      console.log("Chat completed with sources:", sources);
-      
     } catch (err) {
-      console.error("Error in chat flow:", err);
-      setMessages(prev => [
-        { 
-          sender: "bot", 
-          text: "Error: Failed to process your request. Please try again." 
+      console.error("Error in streaming retrieve:", err);
+      setMessages((prev) => [
+        {
+          sender: "bot",
+          text: "Error: Failed to process your request. Please try again.",
         },
-        ...prev.filter(m => m.id !== retrievalId)
+        ...prev.filter((m) => m.id !== retrievalId),
       ]);
     } finally {
       setIsTyping(false);
     }
   };
+
 
   return (
     <div className="flex flex-col h-[70vh] bg-[#ffffff] w-full max-h-[70vh]">
@@ -502,27 +665,66 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                 
                                 {msg.sourceFiles && msg.sourceFiles.length > 0 && (
                                   <div className="mt-2 text-xs text-gray-500">
-                                    <div className="font-medium mb-1">Sources:</div>
-                                    <div className="space-y-2">
-                                      {msg.sourceFiles.map((file, idx) => {
-                                        // display path starting with repo name (dropping the username)
-                                        const parts = file.url.split('/');
-                                        const displayPath = parts.slice(4).join('/');  
-                                        return (
-                                          <div key={idx} className="flex flex-wrap items-baseline gap-x-1.5">
-                                            <button
-                                              className="text-left font-medium underline break-all"
-                                              title={file.url}
-                                              onClick={() => handleSourceClick(file)}
-                                            >
-                                              {displayPath}
-                                            </button>
-                                          </div>
-                                        );
-                                      })}
+                                    <div className="flex items-center justify-between mb-1">
+                                      <div className="font-medium">
+                                        {msg.isRetrieving
+                                          ? "Thinking"
+                                          : `Thought for ${msg.thoughtDuration || "?"}s`}
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          setMessages((prev) =>
+                                            prev.map((mm) =>
+                                              mm.id === msg.id ? { ...mm, expanded: !mm.expanded } : mm
+                                            )
+                                          );
+                                        }}
+                                        className="text-xs underline"
+                                      >
+                                        {msg.expanded ? "Collapse" : "Expand"}
+                                      </button>
                                     </div>
+
+                                    {msg.expanded && (
+                                      <div className="space-y-3 mt-2">
+                                        {msg.sourceFiles.map((file, idx) => (
+                                          <div key={file.url + idx} className="p-2 bg-gray-50 rounded">
+                                            <div className="text-sm font-medium">
+                                              {file.shortUrl || toShortUrl(file.url)}
+                                            </div>
+                                            <div className="whitespace-pre-wrap text-xs mt-1 text-gray-700">
+                                              {file.reasoning}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
+
+                                {!msg.isRetrieving && msg.finalAnswer && (
+                                  <>
+                                    <div className="mt-4 whitespace-pre-wrap">{msg.finalAnswer}</div>
+                                    {msg.sourcesList && msg.sourcesList.length > 0 && (
+                                      <div className="mt-3 text-xs">
+                                        <span className="font-medium">Sources:</span>{" "}
+                                        {msg.sourcesList.map((s, i) => (
+                                          <span key={s.url}>
+                                            <button
+                                              onClick={() => handleSourceClick(s)}
+                                              className="underline"
+                                              title={s.url}
+                                            >
+                                              {s.shortUrl}
+                                            </button>
+                                            {i < (msg.sourcesList?.length ?? 0) - 1 && ", "}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+
                               </div>
                             </div>
                           </div>
