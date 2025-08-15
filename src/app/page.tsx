@@ -4,7 +4,6 @@ import ChatComponent from "@/components/sections/ChatComponent"
 import { useAuth } from '@/lib/AuthContext'
 import { useRepo } from '@/contexts/RepoContext'
 import { useState } from 'react'
-import KnowledgeGraph from "@/components/sections/KnowledgeGraph"
 
 export default function Home() {
   const { user, loading } = useAuth()
@@ -25,8 +24,11 @@ export default function Home() {
         onRepoConnected={handleRepoConnected} 
         isLoggedIn={!!user}
       />
-      {user && showRepoStructure && <ChatComponent />}
-      {user && showRepoStructure && <KnowledgeGraph />}
+      {user && showRepoStructure && (
+        <div id="chat-section">
+          <ChatComponent />
+        </div>
+      )}
     </main>
   )
 }

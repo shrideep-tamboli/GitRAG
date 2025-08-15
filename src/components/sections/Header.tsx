@@ -2,9 +2,11 @@
 import Link from 'next/link'
 import { ProfileDropdown } from '../ProfileDropdown'
 import { FaGithub } from 'react-icons/fa'
-import { FlaskConical } from 'lucide-react'
+import { FlaskConical, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRepo } from '@/contexts/RepoContext'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import KnowledgeGraph from '@/components/sections/KnowledgeGraph'
 
 export function Header() {
   const { isRepoConnected } = useRepo()
@@ -35,6 +37,30 @@ export function Header() {
             >
               <FlaskConical className="w-6 h-6" />
             </Link>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  className={cn(
+                    "text-muted hover:text-foreground transition-colors",
+                    !isRepoConnected && "opacity-50 cursor-not-allowed"
+                  )}
+                  aria-disabled={!isRepoConnected}
+                  onClick={(e) => {
+                    if (!isRepoConnected) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                  title={!isRepoConnected ? "Connect a repository to view structure" : "Repository Structure"}
+                >
+                  <FolderTree className="w-6 h-6" />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] p-4 overflow-hidden">
+                <KnowledgeGraph />
+              </DialogContent>
+            </Dialog>
 
             <Link 
               href="https://github.com/shrideep-tamboli/GitRAG" 

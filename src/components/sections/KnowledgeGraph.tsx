@@ -54,6 +54,7 @@ const [graphData, setGraphData] = useState({ nodes: [], links: [] });
 const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 const [isSideCanvasOpen, setIsSideCanvasOpen] = useState(false);
 const [width, setWidth] = useState(0);
+const [viewportHeight, setViewportHeight] = useState(0);
 const [fileContent, setFileContent] = useState<string>("")
 const [isLoadingContent, setIsLoadingContent] = useState(false)
 
@@ -63,7 +64,9 @@ const closeSideCanvas = () => {
 };
 
 const handleResize = () => {
-  setWidth(window.innerWidth);
+  // Dialog is ~95vw by 90vh; use that as baseline to keep graph proportional
+  setWidth(Math.floor(window.innerWidth * 0.95));
+  setViewportHeight(Math.floor(window.innerHeight * 0.9));
 };
 
 useEffect(() => {
@@ -196,8 +199,8 @@ const fetchGraphData = useCallback(async () => {
   )
 
   return (
-    <>
-      <Card className="p-6 mb-10 border border-border/60 rounded-xl bg-card shadow-lg w-[90%] mx-auto">
+    <div className="h-full flex flex-col">
+      <Card className="p-4 mb-4 border border-border/60 rounded-xl bg-card shadow-lg w-full">
         <h1 className="text-3xl font-bold mb-2 text-foreground">Repository Knowledge Graph</h1>
         <p className="text-muted">
           Explore your repository structure in 3D. Click on nodes to view details.
@@ -205,7 +208,7 @@ const fetchGraphData = useCallback(async () => {
       </Card>
 
       {loading && (
-        <div className="flex items-center justify-center h-[600px]">
+        <div className="flex items-center justify-center flex-1">
           <Loader2 className="h-8 w-8 animate-spin text-accent" />
         </div>
       )}
@@ -213,15 +216,16 @@ const fetchGraphData = useCallback(async () => {
       {error && <div className="p-4 bg-red-900/20 text-red-400 rounded-md border border-red-500/30">{error}</div>}
 
       {!loading && !error && (
-        <div className="flex h-[800px]">
+        <div className="flex flex-1 min-h-0">
           <div
             className={`bg-surface rounded-lg shadow-xl mx-auto overflow-hidden relative transition-all duration-300 ease-in-out border border-border/60 ${
-              isSideCanvasOpen ? "w-1/2" : "w-[90%]"
+              isSideCanvasOpen ? "w-1/2" : "w-full"
               }`}
             style={{
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
+              height: '100%'
             }}
           >
             <div className="w-full h-full">
@@ -247,9 +251,10 @@ const fetchGraphData = useCallback(async () => {
                 linkDirectionalParticles={4}
                 linkDirectionalParticleWidth={3}
                 linkDirectionalParticleSpeed={0.006}
-                backgroundColor="transparent"
+                backgroundColor="rgba(0,0,0,0)"
                 onNodeClick={(node) => handleNodeClick(node as Node)}
-                width={isSideCanvasOpen ? width / 2 : width}
+                width={isSideCanvasOpen ? Math.max(300, Math.floor(width / 2)) : Math.max(300, width)}
+                height={Math.max(300, viewportHeight - 140)}
                 d3AlphaDecay={0.02}
                 d3VelocityDecay={0.3}
                 warmupTicks={100}
@@ -300,21 +305,31 @@ const fetchGraphData = useCallback(async () => {
                 </button>
               </div>
 
-              <div className="flex-1 p-4">
+              <div className="flex-1 p-4 min-h-0">
                 <Tabs defaultValue="codeSummary" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="codeSummary" className="text-foreground">Code Summary</TabsTrigger>
-                    <TabsTrigger value="content" className="text-foreground">Content</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-2 bg-muted/20 rounded-lg p-1">
+                    <TabsTrigger 
+                      value="codeSummary" 
+                      className="text-foreground data-[state=active]:bg-accent data-[state=active]:text-accent-foreground rounded-md"
+                    >
+                      Code Summary
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="content" 
+                      className="text-foreground data-[state=active]:bg-accent data-[state=active]:text-accent-foreground rounded-md"
+                    >
+                      Content
+                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="codeSummary" className="mt-4">
-                    <div className="custom-scrollbar h-[600px]" style={{ overflowY: 'auto' }}>
-                      <div className="p-6 bg-card rounded-md border border-border/60" style={{ 
+                    <div className="custom-scrollbar" style={{ overflowY: 'auto', maxHeight: 'calc(90vh - 220px)' }}>
+                      <div className="p-6 bg-surface rounded-md border border-border/60" style={{ 
                         width: '100%',
                         maxWidth: '100%'
                       }}>
                         {selectedNode?.codeSummary ? (
-                          <div className="prose prose-sm prose-invert" style={{ 
+                          <div className="prose prose-sm prose-invert prose-headings:text-foreground prose-p:text-muted prose-strong:text-foreground" style={{ 
                             maxWidth: '100%',
                             width: '100%'
                           }}>
@@ -418,8 +433,8 @@ const fetchGraphData = useCallback(async () => {
                         <Loader2 className="h-6 w-6 animate-spin text-accent" />
                       </div>
                     ) : (
-                      <div className="custom-scrollbar h-[600px]" style={{ overflowY: 'auto', overflowX: 'auto' }}>
-                        <pre className="bg-card p-4 rounded-md border border-border/60" style={{ maxWidth: '100%' }}>
+                      <div className="custom-scrollbar" style={{ overflowY: 'auto', overflowX: 'auto', maxHeight: 'calc(90vh - 220px)' }}>
+                        <pre className="bg-surface p-4 rounded-md border border-border/60" style={{ maxWidth: '100%' }}>
                           <code className="text-muted font-normal" style={{ 
                             wordBreak: 'break-word', 
                             whiteSpace: 'pre-wrap', 
@@ -500,6 +515,6 @@ const fetchGraphData = useCallback(async () => {
         animation-delay: 400ms;
         }
       `}</style>
-    </>
+    </div>
   )
 }

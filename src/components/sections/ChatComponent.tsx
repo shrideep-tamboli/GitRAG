@@ -128,6 +128,28 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
   const [, setError] = useState("");
   const [, setLoading] = useState(false);
   const [, setWidth] = useState(0)
+  // Thinking animation state
+  const [thinkingText, setThinkingText] = useState("")
+  const thinkingFrames = [
+    "T","Th","Thi","Thin","Think","Thinki","Thinkin","Thinking","Thinking.","Thinking..","Thinking..."
+  ]
+  useEffect(() => {
+    const anyRetrieving = messages.some(m => m.isRetrieving)
+    let interval: number | undefined
+    if (anyRetrieving) {
+      let idx = 0
+      setThinkingText(thinkingFrames[0])
+      interval = window.setInterval(() => {
+        idx = (idx + 1) % thinkingFrames.length
+        setThinkingText(thinkingFrames[idx])
+      }, 200)
+    } else {
+      setThinkingText("")
+    }
+    return () => {
+      if (interval) window.clearInterval(interval)
+    }
+  }, [messages])
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
     links: []
@@ -424,10 +446,9 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                 updateMessageWithSources(d.results);
               }
               
-              // If this is marked as a final batch with no results, we can stop early
-              if (d.isFinal) {
-                break;
-              }
+              // Do not break here on d.isFinal; allow the rest of the lines in this chunk
+              // to be processed (the server may send the 'final' event in the same chunk).
+              // We'll naturally stop when the stream ends.
             } else if (obj.type === "final") {
               const finalSources = obj.data.sources || [];
               const finalQuery = obj.data.finalQuery || chatInput;
@@ -500,6 +521,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                           url: s.url,
                           shortUrl: toShortUrl(s.url),
                         })),
+                        expanded: false,
                       }
                     : m
                 )
@@ -540,14 +562,14 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
 
 
   return (
-    <div className="flex flex-col h-[70vh] bg-background text-foreground w-full max-h-[70vh]">
-      <div className="flex-1 w-full h-full p-2 m-0">
+    <div className="flex flex-col bg-background text-foreground w-full min-h-[50vh]">
+      <div className="w-full p-2 m-0">
         {/* Chat + Source Dialog Section */}
-        <div className="flex gap-4 h-full w-full">
+        <div className="flex gap-4 w-full">
           {/* Chat Container */}
-          <div className={`transition-all duration-300 h-full flex flex-col ${isSourceDialogOpen ? "w-1/2" : "w-full"}`}>
-            <div className="flex-1 border border-border/60 rounded-lg flex flex-col bg-surface overflow-hidden h-full max-h-full">
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col-reverse scrollbar-thin scrollbar-thumb-muted/30 scrollbar-track-transparent">
+          <div className={`transition-all duration-300 flex flex-col ${isSourceDialogOpen ? "w-1/2" : "w-full"}`}>
+            <div className="border border-border/60 rounded-lg flex flex-col bg-surface min-h-98">
+              <div className="flex-1 p-4 flex flex-col-reverse">
                 {isTyping && (
                   <div className="flex justify-start mb-2">
                     <div className="max-w-[70%] p-3 rounded-lg bg-card text-foreground">
@@ -587,11 +609,6 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                         {msg.sender === "bot" ? (
                           <div className={msg.isRetrieving ? "opacity-70" : ""}>
                             <div className="flex items-start">
-                              {msg.isRetrieving && (
-                                <div className="mr-2 mt-0.5">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                </div>
-                              )}
                               <div className="flex-1">
                                 <ReactMarkdown 
                                   className="prose prose-invert max-w-none text-foreground" 
@@ -668,15 +685,12 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                   {msg.text}
                                 </ReactMarkdown>
                                 
-                                {msg.sourceFiles && msg.sourceFiles.length > 0 && (
+                                {(msg.isRetrieving || (msg.sourceFiles && msg.sourceFiles.length > 0)) && (
                                   <div className="mt-2 text-xs text-muted">
                                     <div className="flex items-center justify-between mb-1">
-                                      <div className="font-medium">
-                                        {msg.isRetrieving
-                                          ? "Thinking"
-                                          : `Thought for ${msg.thoughtDuration || "?"}s`}
-                                      </div>
                                       <button
+                                        type="button"
+                                        className="font-medium underline-offset-2 hover:underline"
                                         onClick={() => {
                                           setMessages((prev) =>
                                             prev.map((mm) =>
@@ -684,15 +698,16 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                             )
                                           );
                                         }}
-                                        className="text-xs underline"
                                       >
-                                        {msg.expanded ? "Collapse" : "Expand"}
+                                        {msg.isRetrieving
+                                          ? (thinkingText || "Thinking...")
+                                          : `Thought for ${msg.thoughtDuration || "?"}s`}
                                       </button>
                                     </div>
 
                                     {msg.expanded && (
                                       <div className="space-y-3 mt-2">
-                                        {msg.sourceFiles.map((file, idx) => (
+                                        {(msg.sourceFiles && msg.sourceFiles.length > 0) ? msg.sourceFiles.map((file, idx) => (
                                           <div key={file.url + idx} className="p-2 bg-surface rounded">
                                             <div className="text-sm font-medium">
                                               {file.shortUrl || toShortUrl(file.url)}
@@ -701,7 +716,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                               {file.reasoning}
                                             </div>
                                           </div>
-                                        ))}
+                                        )) : (<></>)}
                                       </div>
                                     )}
                                   </div>
@@ -711,7 +726,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                   <>
                                     <div className="mt-4 whitespace-pre-wrap">{msg.finalAnswer}</div>
                                     {msg.sourcesList && msg.sourcesList.length > 0 && (
-                                      <div className="mt-3 text-xs">
+                                      <div className="mt-3 text-xs text-muted">
                                         <span className="font-medium">Sources:</span>{" "}
                                         {msg.sourcesList.map((s, i) => (
                                           <span key={s.url}>
