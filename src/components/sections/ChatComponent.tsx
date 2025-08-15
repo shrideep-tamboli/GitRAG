@@ -540,17 +540,17 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
 
 
   return (
-    <div className="flex flex-col h-[70vh] bg-[#ffffff] w-full max-h-[70vh]">
+    <div className="flex flex-col h-[70vh] bg-background text-foreground w-full max-h-[70vh]">
       <div className="flex-1 w-full h-full p-2 m-0">
         {/* Chat + Source Dialog Section */}
         <div className="flex gap-4 h-full w-full">
           {/* Chat Container */}
           <div className={`transition-all duration-300 h-full flex flex-col ${isSourceDialogOpen ? "w-1/2" : "w-full"}`}>
-            <div className="flex-1 border-2 border-gray-800/20 rounded-lg flex flex-col bg-[#fdf6e3] overflow-hidden h-full max-h-full">
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col-reverse scrollbar-thin scrollbar-thumb-gray-300/50 scrollbar-track-transparent">
+            <div className="flex-1 border border-border/60 rounded-lg flex flex-col bg-surface overflow-hidden h-full max-h-full">
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col-reverse scrollbar-thin scrollbar-thumb-muted/30 scrollbar-track-transparent">
                 {isTyping && (
                   <div className="flex justify-start mb-2">
-                    <div className="max-w-[70%] p-3 rounded-lg bg-white text-gray-800">
+                    <div className="max-w-[70%] p-3 rounded-lg bg-card text-foreground">
                       <div className="flex items-center space-x-2">
                         <span>Typing</span>
                         <span className="animate-pulse">.</span>
@@ -562,8 +562,8 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                 )}
                 
                 {messages.length === 0 ? (
-                  <div className="text-gray-800">
-                    <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <div className="text-foreground">
+                    <h1 className="text-2xl font-bold text-foreground flex items-center">
                       Chat with <svg className="w-6 h-6 mx-1" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                         <path fillRule="evenodd" clipRule="evenodd" d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                       </svg> Repository
@@ -580,8 +580,8 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                       <div
                         className={`max-w-[70%] p-3 rounded-lg ${
                           msg.sender === "user"
-                            ? "bg-[#f8b878] text-gray-800"
-                            : "bg-white text-gray-800"
+                            ? "bg-accent text-accent-foreground"
+                            : "bg-card text-foreground"
                         }`}
                       >
                         {msg.sender === "bot" ? (
@@ -594,7 +594,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                               )}
                               <div className="flex-1">
                                 <ReactMarkdown 
-                                  className="prose max-w-none text-gray-800" 
+                                  className="prose prose-invert max-w-none text-foreground" 
                                   remarkPlugins={[remarkGfm]}
                                   components={{
                                     h1: ({children, ...props}) => (
@@ -631,20 +631,20 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                       };
 
                                       if (!isCodeBlock) {
-                                        return <code className="px-1 py-0.5 bg-gray-100 rounded text-sm">{children}</code>;
+                                        return <code className="px-1 py-0.5 bg-border/30 rounded text-sm text-foreground">{children}</code>;
                                       }
 
                                       return (
-                                        <div className="relative bg-gray-100 rounded-md p-4 overflow-auto">
+                                        <div className="relative bg-card rounded-md p-4 overflow-auto">
                                           <button 
                                             onClick={handleCopy} 
-                                            className="absolute top-2 right-2 p-1 bg-white rounded shadow hover:bg-gray-200"
+                                            className="absolute top-2 right-2 p-1 bg-surface rounded shadow hover:bg-card"
                                             aria-label="Copy code"
                                           >
-                                            <Copy className="h-4 w-4 text-gray-800" />
+                                            <Copy className="h-4 w-4 text-foreground" />
                                           </button>
                                           <Highlight
-                                            theme={themes.vsLight}
+                                            theme={themes.vsDark}
                                             code={children as string}
                                             language={language}
                                           >
@@ -669,7 +669,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                 </ReactMarkdown>
                                 
                                 {msg.sourceFiles && msg.sourceFiles.length > 0 && (
-                                  <div className="mt-2 text-xs text-gray-500">
+                                  <div className="mt-2 text-xs text-muted">
                                     <div className="flex items-center justify-between mb-1">
                                       <div className="font-medium">
                                         {msg.isRetrieving
@@ -693,11 +693,11 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                     {msg.expanded && (
                                       <div className="space-y-3 mt-2">
                                         {msg.sourceFiles.map((file, idx) => (
-                                          <div key={file.url + idx} className="p-2 bg-gray-50 rounded">
+                                          <div key={file.url + idx} className="p-2 bg-surface rounded">
                                             <div className="text-sm font-medium">
                                               {file.shortUrl || toShortUrl(file.url)}
                                             </div>
-                                            <div className="whitespace-pre-wrap text-xs mt-1 text-gray-700">
+                                            <div className="whitespace-pre-wrap text-xs mt-1 text-muted">
                                               {file.reasoning}
                                             </div>
                                           </div>
@@ -743,16 +743,16 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                 
                 <div ref={messagesStartRef} />
               </div>
-              <div className="p-2 border-t border-gray-800/20 flex items-center space-x-2 relative">
+              <div className="p-2 border-t border-border/60 flex items-center space-x-2 relative">
                 {showSuggestions && (
-                  <ul className={`absolute bottom-full mb-1 left-2 bg-white border rounded-md shadow-lg w-64 z-10 max-h-40 overflow-y-auto 
+                  <ul className={`absolute bottom-full mb-1 left-2 bg-surface border border-border/60 rounded-md shadow-lg w-64 z-10 max-h-40 overflow-y-auto 
                   [&::-webkit-scrollbar]:w-2 
-                  [&::-webkit-scrollbar-thumb]:bg-gray-300/50 
+                  [&::-webkit-scrollbar-thumb]:bg-muted/30 
                   [&::-webkit-scrollbar-thumb]:rounded-full 
                   [&::-webkit-scrollbar-track]:bg-transparent`}
                   >
                     {filteredSuggestions.map((url, idx) => (
-                      <li key={idx} className="px-3 py-1 hover:bg-gray-100 cursor-pointer" 
+                      <li key={idx} className="px-3 py-1 hover:bg-card cursor-pointer" 
                       onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(url) }}
                       >
                       {url}
@@ -767,10 +767,10 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                     onChange={handleChatInputChange}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
                     placeholder="Type a message and use @ to mention files"
-                    className="flex-1 p-2 border-2 border-gray-800/20 rounded-md outline-none focus:ring-2 focus:ring-[#f8b878] text-gray-800 bg-white resize-none custom-chat-scrollbar"
+                    className="flex-1 p-2 border border-border/60 rounded-md outline-none focus:ring-2 focus:ring-accent text-foreground bg-surface resize-none custom-chat-scrollbar"
                     style={{ minHeight: '2.5rem', maxHeight: '22.5rem', overflowY: 'auto' }}
                   />
-                  <button onClick={handleSend} className="p-2 ml-2 bg-[#f8b878] text-gray-800 rounded-md hover:bg-[#f6a55f] transition-colors" aria-label="Send message">
+                  <button onClick={handleSend} className="p-2 ml-2 bg-accent text-accent-foreground rounded-md hover:opacity-90 transition-colors" aria-label="Send message">
                     <Send className="h-5 w-5" />
                   </button>
                 </div>
@@ -779,7 +779,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
 
           {/* Source Dialog */}
           {isSourceDialogOpen && (
-            <div className="w-1/2 bg-[#fdf6e3] border-2 border-gray-800/20 rounded-lg flex flex-col overflow-hidden relative h-full">
+            <div className="w-1/2 bg-surface border border-border/60 rounded-lg flex flex-col overflow-hidden relative h-full">
               {/* Floating close button */}
               <div className="absolute top-2 right-2 z-10 flex gap-2">
                 {!isLoadingSourceContent && (
@@ -789,24 +789,24 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                         console.error("Failed to copy: ", err);
                       });
                     }}
-                    className="p-2 hover:bg-white/50 rounded-full transition-colors"
+                    className="p-2 hover:bg-card rounded-full transition-colors"
                     aria-label="Copy code"
                     title="Copy to clipboard"
                   >
-                    <Copy className="h-5 w-5 text-gray-800" />
+                    <Copy className="h-5 w-5 text-foreground" />
                   </button>
                 )}
                 <button 
                   onClick={closeSourceDialog} 
-                  className="p-2 hover:bg-white/50 rounded-full transition-colors" 
+                  className="p-2 hover:bg-card rounded-full transition-colors" 
                   aria-label="Close"
                 >
-                  <X className="h-5 w-5 text-gray-800" />
+                  <X className="h-5 w-5 text-foreground" />
                 </button>
               </div>
               
-              <div className="p-8 flex-1 overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-300/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
-                <h2 className="text-xl font-bold text-gray-800 break-words pr-16 mb-4">
+              <div className="p-8 flex-1 overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+                <h2 className="text-xl font-bold text-foreground break-words pr-16 mb-4">
                   <span className="truncate block" title={sourceDialogTitle}>
                     {sourceDialogTitle}
                   </span>
@@ -814,12 +814,12 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                 <div className="flex-1 overflow-auto">
                   {isLoadingSourceContent ? (
                     <div className="flex items-center justify-center p-4">
-                      <Loader2 className="h-6 w-6 animate-spin text-[#f8b878]" />
+                      <Loader2 className="h-6 w-6 animate-spin text-accent" />
                     </div>
                   ) : (
-                    <div className="relative bg-gray-100 rounded-md p-4 overflow-auto">
+                    <div className="relative bg-card rounded-md p-4 overflow-auto">
                       <Highlight
-                        theme={themes.vsLight}
+                        theme={themes.vsDark}
                         code={sourceDialogContent}
                         language={sourceDialogTitle.split('.').pop() || 'text'}
                       >

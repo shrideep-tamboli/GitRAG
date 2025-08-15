@@ -10,7 +10,13 @@ export default {
     extend: {
       colors: {
         background: "var(--background)",
+        surface: "var(--surface)",
+        card: "var(--card)",
+        border: "var(--border)",
         foreground: "var(--foreground)",
+        muted: "var(--muted)",
+        accent: "var(--accent)",
+        "accent-foreground": "var(--accent-foreground)",
       },
     },
   },

@@ -4,20 +4,58 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme tokens (light defaults, overridden by .dark) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0f1012;
+  --surface: #101114;
+  --card: #121318;
+  --border: #1d1f24;
+  --foreground: #e5e7eb; /* gray-200 */
+  --muted: #9ca3af;      /* gray-400 */
+  --accent: #22d3ee;     /* cyan-400 */
+  --accent-foreground: #0b0c0f;
 }
 
-@media (prefers-color-scheme: feSpotLight) {
-  :root {
-    --background: #ffffff;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0f1012;
+  --surface: #101114;
+  --card: #121318;
+  --border: #1d1f24;
+  --foreground: #e5e7eb;
+  --muted: #9ca3af;
+  --accent: #22d3ee;
+  --accent-foreground: #0b0c0f;
 }
 
+/* Global base styles */
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: 'Roboto Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Text selection */
+::selection {
+  background: color-mix(in oklab, var(--accent) 24%, transparent);
+  color: var(--foreground);
+}
+
+/* Minimal scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3e44 transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #32353a; border-radius: 9999px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Subtle grid background utility (apply with class: bg-grid) */
+.bg-grid {
+  background-color: var(--background);
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
 }

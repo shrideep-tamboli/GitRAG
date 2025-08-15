@@ -9,14 +9,14 @@ import { useRepo } from '@/contexts/RepoContext'
 export function Header() {
   const { isRepoConnected } = useRepo()
   return (
-    <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-800 z-50">
+    <header className="fixed top-0 left-0 right-0 bg-surface border-b border-border z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Left side: Logo */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
-              <span className="text-xl font-bold text-gray-900">
-                Git<span className="text-[#F6A55f]">Rag</span>
+              <span className="text-xl font-bold text-foreground">
+                Git<span className="text-accent">Rag</span>
               </span>
             </Link>
           </div>
@@ -26,7 +26,7 @@ export function Header() {
             <Link 
               href="/research" 
               className={cn(
-                "text-gray-600 hover:text-gray-900 transition-colors",
+                "text-muted hover:text-foreground transition-colors",
                 !isRepoConnected && "opacity-50 cursor-not-allowed"
               )}
               aria-disabled={!isRepoConnected}
@@ -39,7 +39,7 @@ export function Header() {
             <Link 
               href="https://github.com/shrideep-tamboli/GitRAG" 
               target="_blank"
-              className="text-gray-600 hover:text-gray-900"
+              className="text-muted hover:text-foreground"
             >
               <FaGithub className="w-6 h-6" />
             </Link>

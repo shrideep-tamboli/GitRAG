@@ -249,9 +249,9 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
 
           {/* Main heading with gradient */}
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
-            <span className="bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">Chat with</span>
+            <span className="text-foreground">Chat with</span>
             <br />
-            <span className="bg-gradient-to-r from-[#f8b878] to-[#f6a55f] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-accent to-accent/60 bg-clip-text text-transparent">
               Github Repository
             </span>
           </h1>
@@ -259,34 +259,34 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
           {/* Feature list */}
           <div className="space-y-3 pt-2">
             <div className="flex items-center gap-3">
-              <div className="bg-[#f8b878]/20 p-2 rounded-full">
-                <MessageSquare className="h-5 w-5 text-[#f6a55f]" />
+              <div className="bg-accent/15 p-2 rounded-full">
+                <MessageSquare className="h-5 w-5 text-accent" />
               </div>
-              <span className="text-gray-700">Ask questions about your code</span>
+              <span className="text-muted">Ask questions about your code</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-[#f8b878]/20 p-2 rounded-full">
-                <Search className="h-5 w-5 text-[#f6a55f]" />
+              <div className="bg-accent/15 p-2 rounded-full">
+                <Search className="h-5 w-5 text-accent" />
               </div>
-              <span className="text-gray-700">Search through repository content</span>
+              <span className="text-muted">Search through repository content</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-[#f8b878]/20 p-2 rounded-full">
-                <Sparkles className="h-5 w-5 text-[#f6a55f]" />
+              <div className="bg-accent/15 p-2 rounded-full">
+                <Sparkles className="h-5 w-5 text-accent" />
               </div>
-              <span className="text-gray-700">Get AI-powered code explanations</span>
+              <span className="text-muted">Get AI-powered code explanations</span>
             </div>
           </div>
 
         </div>
 
-        <Card className="border-2 border-gray-800/20 rounded-xl bg-[#fdf6e3] shadow-lg overflow-hidden">
-          <CardHeader className="pb-2 border-b border-gray-800/10">
-            <CardTitle className="text-2xl font-bold flex items-center gap-2 text-gray-800">
+        <Card className="border border-border/60 rounded-xl bg-card shadow-lg overflow-hidden">
+          <CardHeader className="pb-2 border-b border-border/60">
+            <CardTitle className="text-2xl font-bold flex items-center gap-2 text-foreground">
               <GitBranch className="h-6 w-6" />
               Repository Connection
             </CardTitle>
-            <CardDescription className="text-gray-600">
+            <CardDescription className="text-muted">
               {isLoggedIn 
                 ? "Connect to a Git repository to chat with it" 
                 : "Login to Chat with Github repository"}
@@ -297,21 +297,21 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
             <>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <div className="px-6 pt-4">
-                  <TabsList className="grid w-full grid-cols-2 bg-[#f9f9f7] p-1 rounded-lg">
+                  <TabsList className="grid w-full grid-cols-2 bg-surface p-1 rounded-lg border border-border/60">
                     <TabsTrigger
                       value="connect"
-                      className="rounded-md data-[state=active]:bg-[#f8b878] data-[state=active]:text-gray-800 text-gray-600"
+                      className="rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground text-muted"
                     >
                       Connect Repository
                     </TabsTrigger>
                     <TabsTrigger
                       value="connected"
                       disabled={!repoUrl}
-                      className="rounded-md data-[state=active]:bg-[#f8b878] data-[state=active]:text-gray-800 text-gray-600"
+                      className="rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground text-muted"
                     >
                       Connected Repository
                       {repoUrl && (
-                        <Badge variant="outline" className="ml-2 bg-green-100 text-green-800 border-green-200">
+                        <Badge variant="outline" className="ml-2 bg-accent/20 text-accent border-accent/30">
                           1
                         </Badge>
                       )}
@@ -322,25 +322,25 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                 <TabsContent value="connect" className="p-6 pt-4">
                   <div className="space-y-6">
                     <div className="space-y-2">
-                      <label htmlFor="repo-url" className="text-sm font-medium text-gray-700">
+                      <label htmlFor="repo-url" className="text-sm font-medium text-muted">
                         Repository URL
                       </label>
                       <div className="flex gap-2">
                         <div className="relative flex-1">
-                          <Github className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                          <Github className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted h-4 w-4" />
                           <Input
                             id="repo-url"
                             type="text"
                             value={inputRepoUrl}
                             onChange={(e) => setInputRepoUrl(e.target.value)}
                             placeholder="   https://github.com/username/repository"
-                            className="pl-10 border-2 border-gray-800/20 rounded-lg p-3 bg-white text-gray-800 focus:border-gray-800/40 focus:ring-0"
+                            className="pl-10 border border-border/60 rounded-lg p-3 bg-surface text-foreground focus:ring-2 focus:ring-accent"
                           />
                         </div>
                         <Button
                           onClick={() => handleConnect()}
                           disabled={loading || vectorizing || !inputRepoUrl}
-                          className="whitespace-nowrap rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium px-6 hover:bg-[#f6a55f] hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
+                          className="whitespace-nowrap rounded-lg border-0 transition-all bg-accent text-accent-foreground font-medium px-6 hover:bg-accent/90 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
                         >
                           {loading ? (
                             <>
@@ -359,31 +359,31 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                       </div>
                       {error && <div className="text-sm text-red-500 mt-1">{error}</div>}
                       {statusMessage && !error && (
-                        <div className="text-sm text-gray-700 mt-2 font-medium py-1">{statusMessage}</div>
+                        <div className="text-sm text-muted mt-2 font-medium py-1">{statusMessage}</div>
                       )}
                       {vectorizeMessage && (
-                        <div className="text-sm text-gray-700 mt-2 font-medium py-1">{vectorizeMessage}</div>
+                        <div className="text-sm text-muted mt-2 font-medium py-1">{vectorizeMessage}</div>
                       )}
                     </div>
                     
                     <div>
                       {/* Progress bar */}
                       {showProgress && (
-                        <div className="px-6 py-4 border-b border-gray-800/10">
+                        <div className="px-6 py-4 border-b border-border/60">
                           <div className="mb-2 flex justify-between items-center">
-                            <span className="text-sm font-medium text-gray-700">
+                            <span className="text-sm font-medium text-muted">
                               {progressPhase === "processing" ? "Processing" : "Vectorizing"}: {processedFiles}/{totalFiles} files
                             </span>
-                            <span className="text-sm text-gray-500">{progressPercentage}%</span>
+                            <span className="text-sm text-muted">{progressPercentage}%</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div className="w-full bg-muted/30 rounded-full h-2.5">
                             <div 
-                              className="bg-[#f8b878] h-2.5 rounded-full transition-all duration-300 ease-in-out" 
+                              className="bg-accent h-2.5 rounded-full transition-all duration-300 ease-in-out" 
                               style={{ width: `${progressPercentage}%` }}
                             ></div>
                           </div>
                           {currentFile && (
-                            <div className="mt-2 text-xs text-gray-600 truncate" title={currentFile}>
+                            <div className="mt-2 text-xs text-muted truncate" title={currentFile}>
                               {progressPhase === "processing" ? "Processing" : "Vectorizing"}: {currentFile}
                             </div>
                           )}
@@ -392,7 +392,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-medium mb-3 text-gray-700">Quick Connect Examples</h3>
+                      <h3 className="text-sm font-medium mb-3 text-muted">Quick Connect Examples</h3>
                       <div className="flex flex-wrap gap-2">
                         {exampleRepos.map((repo) => (
                           <Button
@@ -401,7 +401,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                             size="sm"
                             onClick={() => handleExampleClick(repo.url)}
                             disabled={loading || vectorizing}
-                            className="flex items-center gap-1.5 bg-[#fdf6e3] border-2 border-gray-800/20 text-gray-800 px-4 py-2 rounded-lg hover:bg-[#f8b878] disabled:opacity-50"
+                            className="flex items-center gap-1.5 bg-card border border-border/60 text-foreground px-4 py-2 rounded-lg hover:border-accent disabled:opacity-50"
                           >
                             <GitFork className="h-3.5 w-3.5" />
                             {repo.name}
@@ -413,36 +413,36 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                     {contents.length > 0 && (
                       <div className="space-y-3 pt-2">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-medium text-gray-700">Repository Contents</h3>
+                          <h3 className="text-sm font-medium text-muted">Repository Contents</h3>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 text-gray-700 hover:bg-[#f8b878]/20 hover:text-gray-900"
+                            className="h-8 text-muted hover:bg-accent/10 hover:text-foreground"
                           >
                             <Copy className="h-3.5 w-3.5 mr-1.5" />
                             Copy
                           </Button>
                         </div>
-                        <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3]">
+                        <Card className="border border-border/60 rounded-lg bg-card">
                           <CardContent className="p-3">
-                            <div className="max-h-[240px] overflow-y-auto pr-2 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+                            <div className="max-h-[240px] overflow-y-auto pr-2 space-y-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                               {contents.map((item, index) => (
                                 <div
                                   key={index}
-                                  className="flex items-start py-1 border-b border-gray-800/10 last:border-0"
+                                  className="flex items-start py-1 border-b border-border/60 last:border-0"
                                 >
-                                  <div className="text-xs text-gray-600 mr-2 mt-0.5">
+                                  <div className="text-xs text-muted mr-2 mt-0.5">
                                     {item.type === "dir" ? "📁" : "📄"}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm truncate text-gray-800">{item.name}</div>
-                                    <div className="text-xs text-gray-600">{item.path}</div>
+                                    <div className="font-medium text-sm truncate text-foreground">{item.name}</div>
+                                    <div className="text-xs text-muted">{item.path}</div>
                                   </div>
                                   {item.download_url && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-7 px-2 text-[#f6a55f] hover:bg-[#f8b878]/20 hover:text-[#f6a55f]"
+                                      className="h-7 px-2 text-accent hover:bg-accent/10 hover:text-accent"
                                       asChild
                                     >
                                       <a href={item.download_url} target="_blank" rel="noopener noreferrer">
@@ -465,15 +465,15 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                   {repoUrl ? (
                     <div className="space-y-6">
                       <div className="space-y-2">
-                        <h3 className="text-sm font-medium text-gray-700">Connected Repository URL</h3>
-                        <Card className="border-2 border-gray-800/20 rounded-lg bg-[#fdf6e3]">
+                        <h3 className="text-sm font-medium text-muted">Connected Repository URL</h3>
+                        <Card className="border border-border/60 rounded-lg bg-card">
                           <CardContent className="p-4 flex items-center gap-2">
-                            <Github className="h-5 w-5 text-gray-600" />
-                            <div className="flex-1 font-mono text-sm break-all text-gray-800">{repoUrl}</div>
+                            <Github className="h-5 w-5 text-muted" />
+                            <div className="flex-1 font-mono text-sm break-all text-foreground">{repoUrl}</div>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 text-gray-700 hover:bg-[#f8b878]/20 hover:text-gray-900"
+                              className="h-8 text-muted hover:bg-accent/10 hover:text-foreground"
                               onClick={() => navigator.clipboard.writeText(repoUrl)}
                             >
                               <Copy className="h-3.5 w-3.5" />
@@ -490,7 +490,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                             const repoStructureSection = document.getElementById("repo-structure")
                             repoStructureSection?.scrollIntoView({ behavior: "smooth" })
                           }}
-                          className="w-full rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium h-12 px-6 hover:bg-[#f6a55f] hover:shadow-md"
+                          className="w-full rounded-lg border-0 transition-all bg-accent text-accent-foreground font-medium h-12 px-6 hover:bg-accent/90 hover:shadow-md"
                         >
                           <LinkIcon className="mr-2 h-4 w-4" />
                           View Repository Structure
@@ -501,7 +501,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                         <Button
                           variant="outline"
                           onClick={() => setActiveTab("connect")}
-                          className="w-full bg-[#fdf6e3] border-2 border-gray-800/20 text-gray-800 px-4 py-2 rounded-lg hover:bg-[#f8b878]"
+                          className="w-full bg-card border border-border/60 text-foreground px-4 py-2 rounded-lg hover:border-accent"
                         >
                           Connect to a Different Repository
                         </Button>
@@ -509,10 +509,10 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                     </div>
                   ) : (
                     <div className="py-8 text-center">
-                      <div className="text-gray-600 mb-4">No repository connected yet</div>
+                      <div className="text-muted mb-4">No repository connected yet</div>
                       <Button
                         onClick={() => setActiveTab("connect")}
-                        className="rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium h-12 px-6 hover:bg-[#f6a55f] hover:shadow-md"
+                        className="rounded-lg border-0 transition-all bg-accent text-accent-foreground font-medium h-12 px-6 hover:bg-accent/90 hover:shadow-md"
                       >
                         Connect a Repository
                       </Button>
@@ -521,10 +521,10 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                 </TabsContent>
               </Tabs>
 
-              <CardFooter className="flex justify-between border-t border-gray-800/10 p-4 bg-[#f9f9f7]/50">
-                <div className="text-xs text-gray-600">Connected as: {user?.email || "Guest"}</div>
+              <CardFooter className="flex justify-between border-t border-border/60 p-4 bg-surface/60">
+                <div className="text-xs text-muted">Connected as: {user?.email || "Guest"}</div>
                 {statusMessage && (
-                  <div className="text-xs font-medium text-gray-700 max-w-[60%] truncate" title={statusMessage}>
+                  <div className="text-xs font-medium text-muted max-w-[60%] truncate" title={statusMessage}>
                     {statusMessage}
                   </div>
                 )}
@@ -533,14 +533,14 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
           ) : (
             <div className="p-8 flex flex-col items-center justify-center">
               <div className="text-center mb-6">
-                <Github className="h-12 w-12 mx-auto mb-4 text-gray-700" />
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Sign in to get started</h3>
-                <p className="text-gray-600 max-w-md mx-auto">
+                <Github className="h-12 w-12 mx-auto mb-4 text-muted" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">Sign in to get started</h3>
+                <p className="text-muted max-w-md mx-auto">
                   Login to connect your Github repositories and start chatting with your codebase using AI.
                 </p>
               </div>
               <Button 
-                className="w-full max-w-sm rounded-lg border-0 transition-all bg-[#f8b878] text-gray-800 font-medium h-12 px-6 hover:bg-[#f6a55f] hover:shadow-md"
+                className="w-full max-w-sm rounded-lg border-0 transition-all bg-accent text-accent-foreground font-medium h-12 px-6 hover:bg-accent/90 hover:shadow-md"
                 onClick={() => window.location.href = '/auth/signin'}
               >
                 Sign in to continue
