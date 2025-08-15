@@ -3,11 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { Loader2, Send, X, Copy } from 'lucide-react'
 import axios from "axios"
-
-interface FrequencyItem {
-  url: string;
-  frequency: number;
-}
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Highlight, themes } from 'prism-react-renderer'
@@ -20,6 +15,17 @@ interface SourceFile {
   codeSummary?: string;
   reasoning?: string;
   relevantCodeBlocks?: string[];
+}
+
+interface SourceResult extends Omit<SourceFile, 'shortUrl'> {
+  isFromContext?: boolean;
+  isFromFrequencyList?: boolean;
+  needed?: boolean;
+  enough?: boolean;
+}
+
+interface FinalSource extends Pick<SourceFile, 'url' | 'reasoning' | 'relevantCodeBlocks' | 'score'> {
+  shortUrl?: string;
 }
 
 interface ChatMessage {
@@ -91,7 +97,7 @@ function toShortUrl(raw: string) {
     const segs = p.filter(Boolean);
     if (segs.length >= 3) return segs.slice(-5).join('/');
     return u.pathname.replace(/^\//, '');
-  } catch (e) {
+  } catch {
     // invalid url — return original
     return raw;
   }
@@ -364,7 +370,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
       // Track all seen files to prevent duplicates
       const seenFiles = new Map<string, boolean>();
       
-      const updateMessageWithSources = (sources: any[]) => {
+      const updateMessageWithSources = (sources: SourceResult[]) => {
         if (!sources || !sources.length) return;
         
         setMessages((prev) =>
@@ -432,7 +438,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
   
               setUrlFrequencies((prev) => {
                 const copy = { ...prev };
-                finalSources.forEach((s: any) => {
+                finalSources.forEach((s: FinalSource) => {
                   copy[s.url] = (copy[s.url] || 0) + 1;
                 });
                 return copy;
@@ -446,11 +452,10 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                         isRetrieving: false,
                         thoughtDuration: retrieveDuration,
                         sourceFiles: (m.sourceFiles || []).concat(
-                          finalSources.map((s: any) => ({
+                          finalSources.map((s: FinalSource) => ({
                             url: s.url,
                             shortUrl: toShortUrl(s.url),
                             score: s.score,
-                            codeSummary: s.codeSummary,
                             reasoning: s.reasoning,
                             relevantCodeBlocks: s.relevantCodeBlocks || [],
                           }))
@@ -463,7 +468,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
               const chatPayload = {
                 message: finalQuery || chatInput,
                 originalMessage: chatInput,
-                sources: finalSources.map((s: any) => ({
+                sources: finalSources.map((s: FinalSource) => ({
                   url: s.url,
                   reasoning:
                     s.reasoning ||
@@ -491,7 +496,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                     ? {
                         ...m,
                         finalAnswer: chatResp.data.response,
-                        sourcesList: finalSources.map((s: any) => ({
+                        sourcesList: finalSources.map((s: FinalSource) => ({
                           url: s.url,
                           shortUrl: toShortUrl(s.url),
                         })),

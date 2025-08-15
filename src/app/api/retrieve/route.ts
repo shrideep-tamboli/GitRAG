@@ -46,7 +46,7 @@ async function generateEmbeddings(text: string): Promise<number[]> {
     model: "text-embedding-004",
     contents: text,
   });
-  const typed = response as any;
+  const typed = response as EmbeddingResponse;
   if (typed.embeddings?.[0]?.values) {
     return typed.embeddings[0].values;
   }
@@ -74,6 +74,21 @@ export interface RetrievedSource {
   summaryEmbedding: number[] | null;
   reasoning: string;
   relevantCodeBlocks: string[];
+}
+
+interface EmbeddingResponse {
+  embeddings?: Array<{ values?: number[] }>;
+  data?: {
+    embeddings: number[][];
+  };
+}
+
+interface ProcessedFileResult extends RetrievedSource {
+  isFromContext?: boolean;
+  isFromFrequencyList?: boolean;
+  needed: boolean;
+  enough: boolean;
+  reasoning: string;
 }
 
 interface RetrieveRequest {
@@ -303,7 +318,7 @@ export async function POST(request: Request) {
             .sort((a, b) => b.score - a.score);
 
           // Phase 1: process cached frequency list in batches (if provided)
-          const phase1Results: any[] = [];
+          const phase1Results: ProcessedFileResult[] = [];
           let shouldProceedToPhase2 = true;
           const BATCH_SIZE = 3;
 
@@ -317,7 +332,7 @@ export async function POST(request: Request) {
             for (let i = 0; i < frequencySummaries.length; i += BATCH_SIZE) {
               const batchNumber = (i / BATCH_SIZE) + 1;
               const batch = frequencySummaries.slice(i, i + BATCH_SIZE);
-              const batchResults: any[] = [];
+              const batchResults: ProcessedFileResult[] = [];
               let hasNeededInBatch = false;
               
               console.log(`\n[${requestId}] [Phase 1] Processing Batch ${batchNumber}`);
@@ -381,7 +396,7 @@ export async function POST(request: Request) {
           }
 
           // Phase 2: process remaining files if no needed files found in Phase 1
-          const phase2Results: any[] = [];
+          const phase2Results: ProcessedFileResult[] = [];
           
           if (shouldProceedToPhase2) {
             const processedUrls = new Set(phase1Results.map(r => r.url));
@@ -393,7 +408,7 @@ export async function POST(request: Request) {
             for (let i = 0; i < remainingSummaries.length; i += BATCH_SIZE) {
               const batchNumber = (i / BATCH_SIZE) + 1;
               const batch = remainingSummaries.slice(i, i + BATCH_SIZE);
-              const batchResults: any[] = [];
+              const batchResults: ProcessedFileResult[] = [];
               
               console.log(`\n[${requestId}] [Phase 2] Processing Batch ${batchNumber}`);
               console.log('─'.repeat(80));
@@ -517,10 +532,10 @@ export async function POST(request: Request) {
           controller.close();
           return;
 
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error(`[${requestId}] Error during processing:`, err);
           if (controller) {
-            write({ type: "error", data: { message: String(err?.message || err) } });
+            write({ type: "error", data: { message: String(err instanceof Error ? err.message : String(err)) } });
             controller.close();
           }
           return;
@@ -535,12 +550,12 @@ export async function POST(request: Request) {
       }
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[${requestId}] Top-level error:`, err);
     return NextResponse.json({ 
       success: false, 
       message: "Failed to retrieve relevant sources",
-      error: err.message 
+      error: err instanceof Error ? err.message : String(err)
     }, { status: 500 });
   }
 }
