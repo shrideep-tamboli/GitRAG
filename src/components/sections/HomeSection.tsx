@@ -39,7 +39,7 @@ export default function HomeSection() {
             </div>
             <h3 className="font-semibold text-lg">Knowledge Graph</h3>
             <p className="text-sm text-center text-justify text-muted">
-              Visualize your repository's structure in an interactive 3D graph. Click on files to view code and summaries instantly.
+              Visualize your repository&apos;s structure in an interactive 3D graph. Click on files to view code and summaries instantly.
             </p>
           </Card>
 
@@ -86,7 +86,7 @@ export default function HomeSection() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent">•</span>
-                  <span>Generate code that's compatible with the newest technologies</span>
+                  <span>Generate code that&apos;s compatible with the newest technologies</span>
                 </li>
               </ul>
             </div>
