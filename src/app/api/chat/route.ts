@@ -15,6 +15,7 @@ import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { trimMessages, HumanMessage } from "@langchain/core/messages";
+import { z } from "zod";
 
 interface RetrievedSource {
   url: string;
@@ -166,6 +167,46 @@ export async function POST(request: Request) {
     );
     const assistantMsg = result.messages.at(-1)!.content;
 
+    // Use Zod-structured output to split the assistant's answer
+    const responseSchema = z.object({
+      textResponse: z
+        .string()
+        .describe("Plain-language explanation without code fences."),
+      codeBlock: z
+        .string()
+        .optional()
+        .describe("Code content without backticks or language fences."),
+      language: z.string().optional().default("typescript"),
+    });
+
+    // Converter prompt: take the model's answer and extract fields
+    const converterPrompt = ChatPromptTemplate.fromMessages([
+      [
+        "system",
+        "You will receive an assistant answer. Extract two parts: a plain text explanation (textResponse) and, if present, a code block's content without backticks (codeBlock) and its language (language). If no code is present, omit codeBlock and language.",
+      ],
+      [
+        "human",
+        "Answer to convert into structured fields:\n{answer}\n\nOnly provide the fields requested.",
+      ],
+    ]);
+
+    const extractor = llm.withStructuredOutput(responseSchema, {
+      name: "ChatResponse",
+    });
+
+    const conversionInput = await converterPrompt.invoke({
+      answer:
+        typeof assistantMsg === "string"
+          ? assistantMsg
+          : JSON.stringify(assistantMsg),
+    });
+
+    const structured = await extractor.invoke(conversionInput);
+    const combinedResponse = structured.codeBlock
+      ? `${structured.textResponse}\n\n\`\`\`${structured.language || "text"}\n${structured.codeBlock}\n\`\`\``
+      : structured.textResponse;
+
     // Persist the final turn
     try {
       console.log('Attempting to save to chat_data:', {
@@ -180,7 +221,7 @@ export async function POST(request: Request) {
         .insert({
           user_query: isEnhancedQuery ? originalMessage : msg,
           enhanced_query: isEnhancedQuery ? msg : null,
-          bot_response: assistantMsg,
+          bot_response: combinedResponse,
           context_urls: sources.map((s) => s.url),
           similarity_scores: sources.map((s) => ({ url: s.url, score: s.score })),
           thread_id: finalThreadId,
@@ -200,7 +241,8 @@ export async function POST(request: Request) {
     // Return the response
     return NextResponse.json({
       success: true,
-      response: assistantMsg,
+      response: combinedResponse,
+      structuredResponse: structured,
       threadId: finalThreadId,
     });
   } catch (err) {

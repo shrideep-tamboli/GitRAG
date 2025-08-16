@@ -48,8 +48,13 @@ interface ChatMessage {
     url: string;
     shortUrl?: string;
   }[];
+  structuredResponse?: {
+    textResponse: string;
+    codeBlock?: string;
+    language?: string;
+  };
+  rewriteQuery?: string; // populated when server streams a rewrite event
 }
-
 
 interface ChatComponentProps {
   threadId?: string;
@@ -124,7 +129,10 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [urlFrequencies, setUrlFrequencies] = useState<Record<string, number>>({});
   const [isTyping, setIsTyping] = useState(false)
-  const messagesStartRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const isUserScrollingUp = useRef(false)
+  const lastScrollTop = useRef(0)
   const [, setError] = useState("");
   const [, setLoading] = useState(false);
   const [, setWidth] = useState(0)
@@ -217,8 +225,33 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
     chatInputRef.current?.focus();
   };
 
+  // Smart scroll: track user scroll direction
   useEffect(() => {
-    messagesStartRef.current?.scrollIntoView({ behavior: "smooth" })
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop } = container;
+      // User is scrolling up if current scrollTop is less than the last recorded
+      isUserScrollingUp.current = scrollTop < lastScrollTop.current;
+      lastScrollTop.current = scrollTop;
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [])
+
+  // Auto-scroll when messages update:
+  // With flex-col-reverse layout, newest content is at the top, so we keep scrollTop near 0
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    const shouldAutoScroll = !isUserScrollingUp.current || lastMessage?.sender === 'bot';
+    if (shouldAutoScroll) {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, [messages])
 
   useEffect(() => {
@@ -517,6 +550,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                     ? {
                         ...m,
                         finalAnswer: chatResp.data.response,
+                        structuredResponse: chatResp.data.structuredResponse,
                         sourcesList: finalSources.map((s: FinalSource) => ({
                           url: s.url,
                           shortUrl: toShortUrl(s.url),
@@ -526,6 +560,21 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                     : m
                 )
               );
+            } else if (obj.type === "rewrite") {
+              // Show the rewritten query immediately in the reasoning panel
+              const rewrittenQuery: string | undefined = obj.data?.rewrittenQuery;
+              if (rewrittenQuery) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === retrievalId
+                      ? {
+                          ...m,
+                          rewriteQuery: rewrittenQuery,
+                        }
+                      : m
+                  )
+                );
+              }
             } else if (obj.type === "error") {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -569,7 +618,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
           {/* Chat Container */}
           <div className={`transition-all duration-300 flex flex-col ${isSourceDialogOpen ? "w-1/2" : "w-full"}`}>
             <div className="border border-border/60 rounded-lg flex flex-col bg-surface min-h-98">
-              <div className="flex-1 p-4 flex flex-col-reverse">
+              <div ref={messagesContainerRef} className="flex-1 p-4 flex flex-col-reverse overflow-y-auto overflow-x-hidden">
                 {isTyping && (
                   <div className="flex justify-start mb-2">
                     <div className="max-w-[70%] p-3 rounded-lg bg-card text-foreground">
@@ -706,45 +755,88 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                     </div>
 
                                     {msg.expanded && (
-                                      <div className="space-y-3 mt-2">
-                                        {(msg.sourceFiles && msg.sourceFiles.length > 0) ? msg.sourceFiles.map((file, idx) => (
-                                          <div key={file.url + idx} className="p-2 bg-surface rounded">
-                                            <div className="text-sm font-medium">
-                                              {file.shortUrl || toShortUrl(file.url)}
-                                            </div>
-                                            <div className="whitespace-pre-wrap text-xs mt-1 text-muted">
-                                              {file.reasoning}
-                                            </div>
+                                      <div className="space-y-3 mt-2 max-h-48 overflow-y-auto scrollbar-hide">
+                                        {msg.rewriteQuery && (
+                                          <div className="p-2 bg-surface rounded">
+                                            <div className="text-sm font-medium">Rewriting query:</div>
+                                            <div className="text-xs text-muted whitespace-pre-wrap">{msg.rewriteQuery}</div>
                                           </div>
-                                        )) : (<></>)}
-                                      </div>
-                                    )}
+                                        )}
+                                         {(msg.sourceFiles && msg.sourceFiles.length > 0) ? msg.sourceFiles.map((file, idx) => (
+                                           <div key={file.url + idx} className="p-2 bg-surface rounded">
+                                             <div className="text-sm font-medium">
+                                               {file.shortUrl || toShortUrl(file.url)}
+                                             </div>
+                                             <div className="whitespace-pre-wrap text-xs mt-1 text-muted">
+                                               {file.reasoning}
+                                             </div>
+                                           </div>
+                                         )) : (<></>)}
+                                       </div>
+                                     )}
                                   </div>
                                 )}
 
                                 {!msg.isRetrieving && msg.finalAnswer && (
                                   <>
-                                    <div className="mt-4 whitespace-pre-wrap">{msg.finalAnswer}</div>
-                                    {msg.sourcesList && msg.sourcesList.length > 0 && (
-                                      <div className="mt-3 text-xs text-muted">
-                                        <span className="font-medium">Sources:</span>{" "}
-                                        {msg.sourcesList.map((s, i) => (
-                                          <span key={s.url}>
+                                    {msg.structuredResponse ? (
+                                      <div className="mt-4 space-y-3">
+                                        {msg.structuredResponse.textResponse && (
+                                          <div className="whitespace-pre-wrap">
+                                            {msg.structuredResponse.textResponse}
+                                          </div>
+                                        )}
+                                        {msg.structuredResponse.codeBlock && (
+                                          <div className="relative bg-card rounded-md p-4 overflow-auto">
                                             <button
-                                              onClick={() => handleSourceClick(s)}
-                                              className="underline"
-                                              title={s.url}
+                                              onClick={() => navigator.clipboard.writeText(msg.structuredResponse!.codeBlock || "")}
+                                              className="absolute top-2 right-2 p-1 bg-surface rounded shadow hover:bg-card"
+                                              aria-label="Copy code"
                                             >
-                                              {s.shortUrl}
+                                              <Copy className="h-4 w-4 text-foreground" />
                                             </button>
-                                            {i < (msg.sourcesList?.length ?? 0) - 1 && ", "}
-                                          </span>
-                                        ))}
+                                            <Highlight
+                                              theme={themes.vsDark}
+                                              code={msg.structuredResponse.codeBlock}
+                                              language={msg.structuredResponse.language || 'typescript'}
+                                            >
+                                              {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                                                <pre className={className} style={{ ...style, background: 'transparent', margin: 0, padding: 0 }}>
+                                                  {tokens.map((line, i) => (
+                                                    <div key={i} {...getLineProps({ line })}>
+                                                      {line.map((token, key) => (
+                                                        <span key={key} {...getTokenProps({ token })} />
+                                                      ))}
+                                                    </div>
+                                                  ))}
+                                                </pre>
+                                              )}
+                                            </Highlight>
+                                          </div>
+                                        )}
                                       </div>
+                                    ) : (
+                                      <div className="mt-4 whitespace-pre-wrap">{msg.finalAnswer}</div>
                                     )}
-                                  </>
-                                )}
-
+                                     {msg.sourcesList && msg.sourcesList.length > 0 && (
+                                       <div className="mt-3 text-xs text-muted">
+                                         <span className="font-medium">Sources:</span>{" "}
+                                         {msg.sourcesList.map((s, i) => (
+                                           <span key={s.url}>
+                                             <button
+                                               onClick={() => handleSourceClick(s)}
+                                               className="underline"
+                                               title={s.url}
+                                             >
+                                               {s.shortUrl}
+                                             </button>
+                                             {i < (msg.sourcesList?.length ?? 0) - 1 && ", "}
+                                           </span>
+                                         ))}
+                                       </div>
+                                     )}
+                                   </>
+                                 )}
                               </div>
                             </div>
                           </div>
@@ -756,7 +848,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                   ))
                 )}
                 
-                <div ref={messagesStartRef} />
+                <div ref={messagesEndRef} />
               </div>
               <div className="p-2 border-t border-border/60 flex items-center space-x-2 relative">
                 {showSuggestions && (

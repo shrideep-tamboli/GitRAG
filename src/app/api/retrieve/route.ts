@@ -13,7 +13,7 @@ const fileRelevanceSchema = z.object({
   needed: z.boolean().describe("Only true if the file is directly relevant to the query"),
   enough: z.boolean().describe("Whether this file alone is sufficient to fully answer the query"),
   reasoning: z.string().describe("Detailed explanation of the decision, including relevance to the query"),
-  relevantCodeBlock: z.array(z.string()).describe("Only specific code blocks directly relevant to the query")
+  relevantCodeBlock: z.array(z.string()).describe("Only specific code blocks directly relevant to the query. Avoid any extra character in the code block, not even any extra special character for say to indicate a line break or new line or tabs, etc that is not there in the source code itself. ")
 });
 
 const supabase = createClient(
@@ -152,7 +152,7 @@ async function shouldUseFile(
     1. needed: true ONLY if this specific file's code directly answers the query
     2. enough: true ONLY if this file alone completely answers the query
     3. reasoning: Explain how THIS FILE's code answers the query. Do not mention other files.
-    4. relevantCodeBlock: Only specific code blocks from THIS FILE that directly answer the query
+    4. relevantCodeBlock: Only specific, raw code blocks from THIS FILE that directly answer the query ()
 
     BE STRICT IN YOUR EVALUATION. When in doubt, mark as not needed.`],
         ["human", `User query: {query}
@@ -297,9 +297,13 @@ export async function POST(request: Request) {
                 try {
                   const rewriteResult = await structuredQueryRewriter.invoke(formattedRewritePrompt);
                   searchQuery = rewriteResult.rewrittenQuery;
+                  // STREAM: inform frontend about rewritten query for reasoning UI
+                  write({ type: "rewrite", data: { rewrittenQuery: searchQuery } });
                 } catch (e) {
                   console.error("Query rewrite failed, falling back to original message:", e);
                   searchQuery = `${conversationHistory} ${message}`.trim();
+                  // STREAM: still inform frontend what we're using as effective query
+                  write({ type: "rewrite", data: { rewrittenQuery: searchQuery } });
                   console.log(`Query (Rewritten): ${searchQuery}`);
                 }
               }
@@ -352,9 +356,10 @@ export async function POST(request: Request) {
                   url: sim.url
                 };
 
-                const fileAnalysis = await shouldUseFile(fileContext, message, 
+                const fileAnalysis = await shouldUseFile(fileContext, searchQuery, 
                   [...phase1Results, ...batchResults].filter(f => f.needed).map(f => f.codeSummary).join("\n\n"));
-
+                console.log(`searchQuery: ${searchQuery}`);
+                console.log(`Original Message: ${message}`)
                 console.log(`[${requestId}] [Phase 1] File Analysis:`);
                 console.log(`  Relative URL: ${filePath}`);
                 console.log(`  Needed: ${fileAnalysis.needed}`);
