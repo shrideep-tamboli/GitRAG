@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/lib/AuthContext"
 import { useRepo } from "@/contexts/RepoContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Copy, Link as LinkIcon, Github, GitBranch, GitFork, ExternalLink, MessageSquare, Search, Sparkles } from "lucide-react"
+import { Loader2, Copy, Link as LinkIcon, Github, GitBranch, GitFork, ExternalLink, MessageSquare, Search, Sparkles, Link } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Header } from "./Header"
 import { Footer } from "./Footer"
@@ -35,6 +35,20 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
   const { setIsRepoConnected } = useRepo()
   const { user } = useAuth()
   const [repoUrl, setRepoUrl] = useState("")
+  const chatSectionRef = useRef<HTMLDivElement>(null)
+  
+  // Import useRef if not already imported
+  const handleScrollToChat = () => {
+    if (chatSectionRef.current) {
+      chatSectionRef.current.scrollIntoView({ behavior: 'smooth' })
+    } else {
+      // Fallback to window scroll if ref is not available
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+  }
   const [inputRepoUrl, setInputRepoUrl] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -237,8 +251,9 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container mx-auto px-4 py-8">
-        <section id="connect-repo" className="py-12 px-4 max-w-6xl mx-auto">
+      <main className="flex-1 flex items-center justify-center w-full min-h-[calc(100vh-4rem)]">
+        <div ref={chatSectionRef} className="absolute bottom-0 w-full" />
+        <section id="connect-repo" className="w-full max-w-6xl mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div className="flex flex-col justify-center space-y-6">
 
@@ -246,7 +261,7 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
                 <span className="text-foreground">Chat with</span>
                 <br />
-                <span className="bg-gradient-to-r from-accent to-accent/60 bg-clip-text text-transparent">
+                <span className="text-accent">
                   Github Repository
                 </span>
               </h1>
@@ -275,8 +290,8 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
 
             </div>
 
-            <Card className="border border-border/60 rounded-xl bg-card shadow-lg overflow-hidden">
-              <CardHeader className="pb-2 border-b border-border/60">
+            <Card className="border border-border/20 rounded-xl bg-card shadow-lg overflow-hidden">
+              <CardHeader className="pb-2 border-b border-border/20">
                 <CardTitle className="text-2xl font-bold flex items-center gap-2 text-foreground">
                   <GitBranch className="h-6 w-6" />
                   Repository Connection
@@ -305,11 +320,6 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                           className="rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground text-muted"
                         >
                           Connected Repository
-                          {repoUrl && (
-                            <Badge variant="outline" className="ml-2 bg-accent/20 text-accent border-accent/30">
-                              1
-                            </Badge>
-                          )}
                         </TabsTrigger>
                       </TabsList>
                     </div>
@@ -482,23 +492,13 @@ export default function ConnectRepoSection({ onRepoConnected, isLoggedIn = true 
                             <Button
                               onClick={() => {
                                 onRepoConnected()
-                                const chatSection = document.getElementById("chat-section")
-                                chatSection?.scrollIntoView({ behavior: "smooth" })
+                                // Small delay to ensure the chat component is rendered
+                                setTimeout(handleScrollToChat, 100)
                               }}
-                              className="w-full rounded-lg border-0 transition-all bg-accent text-accent-foreground font-medium h-12 px-6 hover:bg-accent/90 hover:shadow-md"
+                              className="w-full bg-card border border-border/60 text-foreground px-4 py-2 rounded-lg hover:border-accent hover:bg-accent/10 hover:text-accent"
                             >
-                              <LinkIcon className="mr-2 h-4 w-4" />
+                              <MessageSquare className="mr-2 h-4 w-4" />
                               Chat
-                            </Button>
-                          </div>
-
-                          <div className="pt-2">
-                            <Button
-                              variant="outline"
-                              onClick={() => setActiveTab("connect")}
-                              className="w-full bg-card border border-border/60 text-foreground px-4 py-2 rounded-lg hover:border-accent"
-                            >
-                              Connect to a Different Repository
                             </Button>
                           </div>
                         </div>
