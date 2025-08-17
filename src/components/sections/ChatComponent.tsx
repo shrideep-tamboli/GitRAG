@@ -610,14 +610,25 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
   };
 
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState('auto');
+
+  // Update height when messages change or side panel is toggled
+  useEffect(() => {
+    if (containerRef.current) {
+      const height = containerRef.current.offsetHeight;
+      setContainerHeight(`${height}px`);
+    }
+  }, [messages, isSourceDialogOpen]);
+
   return (
-    <div className="flex flex-col bg-background text-foreground w-full min-h-[50vh]">
-      <div className="w-full p-2 m-0">
+    <div className="flex flex-col bg-background text-foreground w-full min-h-[calc(100vh-200px)] mb-10">
+      <div className="w-full h-full p-2 m-0">
         {/* Chat + Source Dialog Section */}
-        <div className="flex gap-4 w-full">
+        <div className="flex gap-4 w-full h-full">
           {/* Chat Container */}
-          <div className={`transition-all duration-300 flex flex-col ${isSourceDialogOpen ? "w-1/2" : "w-full"}`}>
-            <div className="border border-border/60 rounded-lg flex flex-col bg-surface min-h-98">
+          <div ref={containerRef} className={`transition-all duration-300 flex flex-col ${isSourceDialogOpen ? "w-1/2" : "w-full"}`}>
+            <div className="border border-border/60 rounded-lg flex flex-col bg-surface h-full">
               <div ref={messagesContainerRef} className="flex-1 p-4 flex flex-col-reverse overflow-y-auto overflow-x-hidden">
                 {isTyping && (
                   <div className="flex justify-start mb-2">
@@ -701,7 +712,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                       }
 
                                       return (
-                                        <div className="relative bg-card rounded-md p-4 overflow-auto">
+                                        <div className="relative bg-card rounded-md p-4 overflow-auto z-10">
                                           <button 
                                             onClick={handleCopy} 
                                             className="absolute top-2 right-2 p-1 bg-surface rounded shadow hover:bg-card"
@@ -735,8 +746,8 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                 </ReactMarkdown>
                                 
                                 {(msg.isRetrieving || (msg.sourceFiles && msg.sourceFiles.length > 0)) && (
-                                  <div className="mt-2 text-xs text-muted">
-                                    <div className="flex items-center justify-between mb-1">
+                                  <div className="text-xs text-muted bg-surface">
+                                    <div className="flex items-center justify-between mb-1 bg-card p-2">
                                       <button
                                         type="button"
                                         className="font-medium underline-offset-2 hover:underline"
@@ -757,16 +768,19 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                     {msg.expanded && (
                                       <div className="space-y-3 mt-2 max-h-48 overflow-y-auto scrollbar-hide">
                                         {msg.rewriteQuery && (
-                                          <div className="p-2 bg-surface rounded">
-                                            <div className="text-sm font-medium">Rewriting query:</div>
+                                          <div className="p-2 rounded w-[98%] mx-auto">
+                                            <div className="text-xs text-muted">Rewriting query:</div>
                                             <div className="text-xs text-muted whitespace-pre-wrap">{msg.rewriteQuery}</div>
                                           </div>
                                         )}
                                          {(msg.sourceFiles && msg.sourceFiles.length > 0) ? msg.sourceFiles.map((file, idx) => (
-                                           <div key={file.url + idx} className="p-2 bg-surface rounded">
-                                             <div className="text-sm font-medium">
+                                           <div key={file.url + idx} className="p-2 rounded w-[98%] mx-auto mb-4">
+                                             <button 
+                                               onClick={() => handleSourceClick(file)}
+                                               className="text-xs text-muted underline hover:text-blue-500 transition-colors cursor-pointer text-left w-full"
+                                             >
                                                {file.shortUrl || toShortUrl(file.url)}
-                                             </div>
+                                             </button>
                                              <div className="whitespace-pre-wrap text-xs mt-1 text-muted">
                                                {file.reasoning}
                                              </div>
@@ -787,7 +801,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                           </div>
                                         )}
                                         {msg.structuredResponse.codeBlock && (
-                                          <div className="relative bg-card rounded-md p-4 overflow-auto">
+                                          <div className="relative bg-surface rounded-md p-4 overflow-auto z-10">
                                             <button
                                               onClick={() => navigator.clipboard.writeText(msg.structuredResponse!.codeBlock || "")}
                                               className="absolute top-2 right-2 p-1 bg-surface rounded shadow hover:bg-card"
@@ -816,7 +830,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                         )}
                                       </div>
                                     ) : (
-                                      <div className="mt-4 whitespace-pre-wrap">{msg.finalAnswer}</div>
+                                      <div className="mt-20 whitespace-pre-wrap">{msg.finalAnswer}</div>
                                     )}
                                      {msg.sourcesList && msg.sourcesList.length > 0 && (
                                        <div className="mt-3 text-xs text-muted">
@@ -885,46 +899,42 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
             </div>
 
           {/* Source Dialog */}
-          {isSourceDialogOpen && (
-            <div className="w-1/2 bg-surface border border-border/60 rounded-lg flex flex-col overflow-hidden relative h-full">
-              {/* Floating close button */}
-              <div className="absolute top-2 right-2 z-10 flex gap-2">
-                {!isLoadingSourceContent && (
-                  <button 
+          <div 
+            className={`transition-all duration-300 ${isSourceDialogOpen ? 'w-1/2' : 'w-0'} overflow-hidden relative`}
+            style={{ height: containerHeight }}
+          >
+            <div className="border border-border/60 rounded-lg flex flex-col bg-surface w-full h-full">
+              <div className="flex justify-between items-center p-2 border-b border-border/60">
+                <h3 className="text-sm font-medium px-2 truncate max-w-[80%]">{sourceDialogTitle}</h3>
+                <div className="flex items-center space-x-2">
+                  <button
                     onClick={() => {
                       navigator.clipboard.writeText(sourceDialogContent).catch(err => {
                         console.error("Failed to copy: ", err);
                       });
                     }}
-                    className="p-2 hover:bg-card rounded-full transition-colors"
-                    aria-label="Copy code"
+                    className="p-1.5 hover:bg-card rounded-md transition-colors"
                     title="Copy to clipboard"
                   >
-                    <Copy className="h-5 w-5 text-foreground" />
+                    <Copy className="h-4 w-4 text-muted-foreground" />
                   </button>
-                )}
-                <button 
-                  onClick={closeSourceDialog} 
-                  className="p-2 hover:bg-card rounded-full transition-colors" 
-                  aria-label="Close"
-                >
-                  <X className="h-5 w-5 text-foreground" />
-                </button>
+                  <button
+                    onClick={closeSourceDialog}
+                    className="p-1.5 hover:bg-card rounded-md transition-colors"
+                    title="Close panel"
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
               </div>
-              
-              <div className="p-8 flex-1 overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
-                <h2 className="text-xl font-bold text-foreground break-words pr-16 mb-4">
-                  <span className="truncate block" title={sourceDialogTitle}>
-                    {sourceDialogTitle}
-                  </span>
-                </h2>
-                <div className="flex-1 overflow-auto">
+              <div className="p-6 flex-1 flex flex-col overflow-hidden h-full">
+                <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent h-full">
                   {isLoadingSourceContent ? (
                     <div className="flex items-center justify-center p-4">
                       <Loader2 className="h-6 w-6 animate-spin text-accent" />
                     </div>
                   ) : (
-                    <div className="relative bg-card rounded-md p-4 overflow-auto">
+                    <div className="relative bg-card rounded-md p-4">
                       <Highlight
                         theme={themes.vsDark}
                         code={sourceDialogContent}
@@ -947,7 +957,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
