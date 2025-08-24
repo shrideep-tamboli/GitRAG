@@ -880,7 +880,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                         </button>
                                         {msg.expandedSources && (
                                           <div className="mt-1 text-xs text-muted pl-2 border-l-2 border-muted">
-                                            {msg.sourcesList.map((s, i) => (
+                                            {msg.sourcesList.map((s) => (
                                               <div key={s.url} className="py-1">
                                                 <button
                                                   onClick={() => handleSourceClick(s)}
