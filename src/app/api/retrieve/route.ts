@@ -321,12 +321,13 @@ export async function POST(request: Request) {
             .map(s => ({ ...s, score: cosineSimilarity(queryEmbedding, s.summaryEmbedding!) }))
             .sort((a, b) => b.score - a.score);
 
-          // Phase 1: process cached frequency list in batches (if provided)
+          // Phase 1: process cached frequency list in batches (if message needs context and frequency list exists)
           const phase1Results: ProcessedFileResult[] = [];
           let shouldProceedToPhase2 = true;
           const BATCH_SIZE = 3;
+          const shouldRunPhase1 = !contextCheck.hasEnoughContext && urlFrequencyList?.length > 0;
 
-          if (urlFrequencyList?.length > 0) {
+          if (shouldRunPhase1) {
             const frequencyUrls = new Set(urlFrequencyList.map(item => item.url));
             const frequencySummaries = allSummariesWithScores
               .filter(s => Array.from(frequencyUrls).some(url => s.url.includes(url)))

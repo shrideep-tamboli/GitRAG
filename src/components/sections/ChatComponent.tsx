@@ -33,7 +33,8 @@ interface ChatMessage {
   text: string;
   id?: string;
   isRetrieving?: boolean;
-  expanded?: boolean;
+  expandedThoughts?: boolean;
+  expandedSources?: boolean;
   sourceFiles?: {
     url: string;
     shortUrl?: string;
@@ -555,7 +556,8 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                           url: s.url,
                           shortUrl: toShortUrl(s.url),
                         })),
-                        expanded: false,
+                        expandedThoughts: false,
+                        expandedSources: false,
                       }
                     : m
                 )
@@ -632,7 +634,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
               <div ref={messagesContainerRef} className="flex-1 p-4 flex flex-col-reverse overflow-y-auto overflow-x-hidden">
                 {isTyping && (
                   <div className="flex justify-start mb-2">
-                    <div className="max-w-[70%] p-3 rounded-lg bg-card text-foreground">
+                    <div className="max-w-[90%] p-3 rounded-lg bg-card text-foreground">
                       <div className="flex items-center space-x-2">
                         <span>Typing</span>
                         <span className="animate-pulse">.</span>
@@ -660,7 +662,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                   messages.map((msg, idx) => (
                     <div key={idx} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} mb-2`}>
                       <div
-                        className={`max-w-[70%] p-3 rounded-lg ${
+                        className={`max-w-[90%] p-3 rounded-lg break-words overflow-x-auto ${
                           msg.sender === "user"
                             ? "bg-accent text-accent-foreground"
                             : "bg-card text-foreground"
@@ -671,7 +673,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                             <div className="flex items-start">
                               <div className="flex-1">
                                 <ReactMarkdown 
-                                  className="prose prose-invert max-w-none text-foreground" 
+                                  className="prose prose-sm prose-invert max-w-none break-words text-foreground" 
                                   remarkPlugins={[remarkGfm]}
                                   components={{
                                     h1: ({children, ...props}) => (
@@ -712,7 +714,7 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                       }
 
                                       return (
-                                        <div className="relative bg-card rounded-md p-4 overflow-auto z-10">
+                                        <div className="relative bg-card rounded-md p-4 overflow-x-auto max-w-full z-10">
                                           <button 
                                             onClick={handleCopy} 
                                             className="absolute top-2 right-2 p-1 bg-surface rounded shadow hover:bg-card"
@@ -750,27 +752,43 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                     <div className="flex items-center justify-between mb-1 bg-card p-2">
                                       <button
                                         type="button"
-                                        className="font-medium underline-offset-2 hover:underline"
+                                        className="font-medium flex items-center underline-offset-2 hover:underline"
                                         onClick={() => {
                                           setMessages((prev) =>
                                             prev.map((mm) =>
-                                              mm.id === msg.id ? { ...mm, expanded: !mm.expanded } : mm
+                                              mm.id === msg.id ? { ...mm, expandedThoughts: !mm.expandedThoughts } : mm
                                             )
                                           );
                                         }}
                                       >
-                                        {msg.isRetrieving
-                                          ? (thinkingText || "Thinking...")
-                                          : `Thought for ${msg.thoughtDuration || "?"}s`}
+                                        {msg.isRetrieving ? (
+                                          <span>{thinkingText || "Thinking..."}</span>
+                                        ) : (
+                                          <>
+                                            <span>Thought for {msg.thoughtDuration || "?"}s</span>
+                                            <svg
+                                              className="w-3 h-3 ml-1 transition-transform"
+                                              fill="none"
+                                              viewBox="0 0 24 24"
+                                              stroke="currentColor"
+                                              style={{
+                                                transform: msg.expandedThoughts ? 'rotate(180deg)' : 'none',
+                                                transition: 'transform 200ms ease-in-out'
+                                              }}
+                                            >
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                          </>
+                                        )}
                                       </button>
                                     </div>
 
-                                    {msg.expanded && (
-                                      <div className="space-y-3 mt-2 max-h-48 overflow-y-auto scrollbar-hide">
+                                    {msg.expandedThoughts && (
+                                      <div className="space-y-3 mt-2 max-h-48 overflow-y-auto overflow-x-hidden break-words scrollbar-hide">
                                         {msg.rewriteQuery && (
                                           <div className="p-2 rounded w-[98%] mx-auto">
                                             <div className="text-xs text-muted">Rewriting query:</div>
-                                            <div className="text-xs text-muted whitespace-pre-wrap">{msg.rewriteQuery}</div>
+                                            <div className="text-xs text-muted break-words whitespace-pre-wrap">{msg.rewriteQuery}</div>
                                           </div>
                                         )}
                                          {(msg.sourceFiles && msg.sourceFiles.length > 0) ? msg.sourceFiles.map((file, idx) => (
@@ -833,21 +851,48 @@ export default function ChatComponent({ threadId: propThreadId }: ChatComponentP
                                       <div className="mt-20 whitespace-pre-wrap">{msg.finalAnswer}</div>
                                     )}
                                      {msg.sourcesList && msg.sourcesList.length > 0 && (
-                                       <div className="mt-3 text-xs text-muted">
-                                         <span className="font-medium">Sources:</span>{" "}
-                                         {msg.sourcesList.map((s, i) => (
-                                           <span key={s.url}>
-                                             <button
-                                               onClick={() => handleSourceClick(s)}
-                                               className="underline"
-                                               title={s.url}
-                                             >
-                                               {s.shortUrl}
-                                             </button>
-                                             {i < (msg.sourcesList?.length ?? 0) - 1 && ", "}
-                                           </span>
-                                         ))}
-                                       </div>
+                                      <div className="mt-3">
+                                        <button
+                                          className="flex items-center text-xs text-muted hover:text-foreground transition-colors"
+                                          onClick={() => {
+                                            setMessages((prev) =>
+                                              prev.map((m) =>
+                                                m.id === msg.id ? { ...m, expandedSources: !m.expandedSources } : m
+                                              )
+                                            );
+                                          }}
+                                        >
+                                          <span className="font-medium text-muted">
+                                            Sources ({msg.sourcesList.length})
+                                          </span>
+                                          <svg
+                                            className="w-3 h-3 ml-1 transition-transform"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            style={{
+                                              transform: msg.expandedSources ? 'rotate(180deg)' : 'none',
+                                              transition: 'transform 200ms ease-in-out'
+                                            }}
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                          </svg>
+                                        </button>
+                                        {msg.expandedSources && (
+                                          <div className="mt-1 text-xs text-muted pl-2 border-l-2 border-muted">
+                                            {msg.sourcesList.map((s, i) => (
+                                              <div key={s.url} className="py-1">
+                                                <button
+                                                  onClick={() => handleSourceClick(s)}
+                                                  className="hover:underline hover:text-blue-500 break-all text-left"
+                                                >
+                                                  {s.shortUrl}
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
                                      )}
                                    </>
                                  )}
